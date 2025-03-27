@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { X, Calendar, ChevronDown, ChevronUp, Download } from "lucide-react";
 import Datepicker from "react-tailwindcss-datepicker";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import useAuthStore from "../store/authStore";
 import axiosInstance from "../axiosInstance";
 import SchedulePlanSection from "./SchedulePlanSection";
+import InternalSchedulePlanSection from "./InternalSchedulePlanSection";
 const PORT = import.meta.env.VITE_PORT;
 import axios from "axios";
 const ProjectModal = ({
@@ -22,6 +23,9 @@ const ProjectModal = ({
     useAuthStore();
   // Initialize react-hook-form
   const [scheduleTableData, setScheduleTableData] = useState([]);
+  const [internalScheduleDataState, setInternalScheduleDataState] = useState(
+    []
+  ); // For internal schedules
   const [departments, setDepartments] = useState([]);
   const [initiatives, setInitiatives] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
@@ -177,22 +181,24 @@ const ProjectModal = ({
     },
   ];
 
-  const internalScheduleData = [
-    {
-      mainPhase: "Planning",
-      subPhase: "Prepare scope",
-      duration: "4 weeks",
-      startDate: "5- May -23",
-      endDate: "5- May -23",
-    },
-    {
-      mainPhase: "Execution",
-      subPhase: "Execute phase",
-      duration: "4 weeks",
-      startDate: "5- May -23",
-      endDate: "5- May -23",
-    },
-  ];
+  const internalScheduleData = useMemo(
+    () => [
+      // Your initial schedule data or fetched data
+      {
+        id: 1,
+        mainPhase: "Planning",
+        subPhase: "Prepare scope",
+        duration: "28 days",
+      },
+      {
+        id: 4,
+        mainPhase: "Execution",
+        subPhase: "Execute phase",
+        duration: "28 days",
+      },
+    ],
+    [] // Empty dependency array if static, or add dependencies if dynamic
+  );
 
   useEffect(() => {
     const fetchPhaseDurations = async () => {
@@ -490,9 +496,17 @@ const ProjectModal = ({
     }
   };
 
-  const handleScheduleChange = (data) => {
-    setScheduleTableData(data);
-  };
+  const handleScheduleChange = useCallback(
+    (data) => {
+      const isInternal = ["1", "4"].includes(projectType);
+      if (isInternal) {
+        setInternalScheduleDataState(data);
+      } else {
+        setScheduleTableData(data);
+      }
+    },
+    [projectType]
+  );
 
   const handleSaveDraft = async () => {
     await handleSubmit(async (data) => {
@@ -654,7 +668,7 @@ const ProjectModal = ({
     // Clear schedule table data if needed
     setScheduleTableData([]);
 
-    // Show confirmation to user
+    setInternalScheduleDataState([]);
   };
 
   // Handle form submission
@@ -764,39 +778,73 @@ const ProjectModal = ({
             endDate: phase.endDate,
           }))
         );
-        // Step 3: Save the schedule plan
-        const schedulePlanResponse = await axiosInstance.post(
-          `/data-management/upsertSchedulePlan`,
-          {
+
+        // Save schedule plan based on project type
+        const isInternal = ["1", "4"].includes(projectType);
+        if (isInternal && internalScheduleDataState.length > 0) {
+          console.log({
             projectId,
-            schedule: scheduleTableData.map((phase) => ({
-              phaseId: phase.phaseId,
+            schedule: internalScheduleDataState.map((phase) => ({
+              phaseId: phase.id,
               durationDays: phase.durationDays,
               startDate: phase.startDate,
               endDate: phase.endDate,
             })),
-          }
-        );
-
-        console.log("Schedule plan response:", schedulePlanResponse); // Debug log
-
-        if (
-          schedulePlanResponse.data &&
-          schedulePlanResponse.data.status === "success"
-        ) {
-          if (projectData.approval_status === "Not initiated") {
-            toast.success("Project and schedule plan saved successfully!");
-            if (onClose) onClose();
-          }
-        } else {
-          throw new Error(
-            schedulePlanResponse.data?.message || "Failed to save schedule plan"
+          });
+          const internalScheduleResponse = await axiosInstance.post(
+            `/data-management/upsertInternalSchedulePlan`,
+            {
+              projectId,
+              schedule: internalScheduleDataState.map((phase) => ({
+                phaseId: phase.id,
+                durationDays: phase.durationDays,
+                startDate: phase.startDate,
+                endDate: phase.endDate,
+              })),
+            }
           );
+
+          if (
+            internalScheduleResponse.data &&
+            internalScheduleResponse.data.status !== "success"
+          ) {
+            throw new Error(
+              internalScheduleResponse.data?.message ||
+                "Failed to save internal schedule plan"
+            );
+          }
+        } else if (scheduleTableData.length > 0) {
+          const schedulePlanResponse = await axiosInstance.post(
+            `/data-management/upsertSchedulePlan`,
+            {
+              projectId,
+              schedule: scheduleTableData.map((phase) => ({
+                phaseId: phase.phaseId,
+                durationDays: phase.durationDays,
+                startDate: phase.startDate,
+                endDate: phase.endDate,
+              })),
+            }
+          );
+
+          if (
+            schedulePlanResponse.data &&
+            schedulePlanResponse.data.status !== "success"
+          ) {
+            throw new Error(
+              schedulePlanResponse.data?.message ||
+                "Failed to save schedule plan"
+            );
+          }
         }
 
-        return projectResponse; // Always return the response
+        if (projectData.approval_status === "Not initiated") {
+          toast.success("Project and schedule plan saved successfully!");
+          if (onClose) onClose();
+        }
+
+        return projectResponse;
       } else {
-        console.error("Project save failed:", projectResponse.data);
         throw new Error(
           projectResponse.data?.message || "Failed to add project"
         );
@@ -1027,6 +1075,10 @@ const ProjectModal = ({
                       <option value="" disabled>
                         Select Project Type
                       </option>
+                      <option value="" disabled>
+                        {" "}
+                      </option>
+
                       {projectTypes.map((type) => (
                         <option key={type.id} value={type.id}>
                           {type.name}
@@ -1417,14 +1469,20 @@ const ProjectModal = ({
           </div>
           {/* Schedule Plan */}
           {(shouldShowSection("schedule") ||
-            shouldShowSection("internalSchedule")) && (
-            <SchedulePlanSection
-              budget={watch("planned_budget")}
-              onScheduleChange={handleScheduleChange}
-              internalScheduleData={internalScheduleData}
-              projectType={watch("projectType")}
-            />
-          )}
+            shouldShowSection("internalSchedule")) &&
+            (["1", "4"].includes(projectType) ? (
+              <InternalSchedulePlanSection
+                projectId={projectData.id}
+                onScheduleChange={handleScheduleChange}
+                internalScheduleData={internalScheduleData}
+              />
+            ) : (
+              <SchedulePlanSection
+                budget={watch("planned_budget")}
+                onScheduleChange={handleScheduleChange}
+                projectType={watch("projectType")}
+              />
+            ))}
           {/* Documents Section */}
           <div className="mb-6 border-t pt-4">
             <ProjectDocumentSection

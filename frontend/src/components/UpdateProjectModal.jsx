@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { X, ChevronDown, ChevronUp } from "lucide-react";
 import Datepicker from "react-tailwindcss-datepicker";
@@ -6,6 +6,7 @@ import UpdateProjectDocumentSection from "./UpdateProjectDocumentSection";
 import { toast } from "sonner";
 import useAuthStore from "../store/authStore";
 import UpdateSchedulePlanSection from "./UpdateSchedulePlanSection";
+import InternalSchedulePlanSection from "./InternalSchedulePlanSection"; // Import InternalSchedulePlanSection
 import axiosInstance from "../axiosInstance";
 
 const UpdateProjectModal = ({
@@ -18,6 +19,9 @@ const UpdateProjectModal = ({
 }) => {
   const [activeSection, setActiveSection] = useState("all");
   const [scheduleTableData, setScheduleTableData] = useState([]);
+  const [internalScheduleDataState, setInternalScheduleDataState] = useState(
+    []
+  ); // For internal schedules
   const [departments, setDepartments] = useState([]);
   const [initiatives, setInitiatives] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
@@ -90,11 +94,29 @@ const UpdateProjectModal = ({
   const currentPhase = watch("current_phase_id");
   const selectedProgramId = watch("program_id");
 
+  // Initial internal schedule data for Internal (1) and Proof of Concept (4) projects
+  const internalScheduleData = useMemo(
+    () => [
+      {
+        id: 1, // Planning phase
+        mainPhase: "Planning",
+        subPhase: "Prepare scope",
+        duration: "28 days",
+      },
+      {
+        id: 4, // Execution phase
+        mainPhase: "Execution",
+        subPhase: "Execute phase",
+        duration: "28 days",
+      },
+    ],
+    []
+  );
+
   // Fetch departments and beneficiary departments
   useEffect(() => {
     const fetchDepartmentsAndBeneficiaries = async () => {
       try {
-        // Fetch all departments
         const deptResponse = await axiosInstance.post(
           `/data-management/getDepartments`
         );
@@ -102,7 +124,6 @@ const UpdateProjectModal = ({
           throw new Error("Failed to fetch departments");
         }
 
-        // Fetch current beneficiary departments for this project
         const beneficiaryResponse = await axiosInstance.post(
           `/data-management/getBeneficiaryDepartments`,
           { projectId: projectData.id }
@@ -111,8 +132,7 @@ const UpdateProjectModal = ({
           throw new Error("Failed to fetch beneficiary departments");
         }
 
-        const beneficiaryDeptIds = beneficiaryResponse.data.result; // Array of department IDs
-
+        const beneficiaryDeptIds = beneficiaryResponse.data.result;
         const fetchedDepartments = deptResponse.data.result.map((dept) => ({
           id: dept.id,
           name: dept.name,
@@ -126,7 +146,7 @@ const UpdateProjectModal = ({
           fetchedDepartments
             .filter((dept) => dept.checked)
             .map((dept) => dept.id)
-        ); // Set form value to array of checked IDs
+        );
       } catch (error) {
         console.error("Error fetching departments or beneficiaries:", error);
         toast.error("Failed to load departments or beneficiary data");
@@ -138,7 +158,7 @@ const UpdateProjectModal = ({
     }
   }, [projectData?.id, setValue]);
 
-  // Fetch initiatives
+  // Fetch initiatives, portfolios, programs, vendors, objectives (unchanged)
   useEffect(() => {
     const fetchInitiatives = async () => {
       try {
@@ -156,7 +176,6 @@ const UpdateProjectModal = ({
     fetchInitiatives();
   }, []);
 
-  // Fetch portfolios
   useEffect(() => {
     const fetchPortfolios = async () => {
       try {
@@ -174,7 +193,6 @@ const UpdateProjectModal = ({
     fetchPortfolios();
   }, []);
 
-  // Fetch programs
   useEffect(() => {
     const fetchPrograms = async () => {
       try {
@@ -192,7 +210,6 @@ const UpdateProjectModal = ({
     fetchPrograms();
   }, []);
 
-  // Fetch vendors
   useEffect(() => {
     const fetchVendors = async () => {
       try {
@@ -210,7 +227,6 @@ const UpdateProjectModal = ({
     fetchVendors();
   }, []);
 
-  // Fetch objectives
   useEffect(() => {
     const fetchObjectives = async () => {
       try {
@@ -287,9 +303,18 @@ const UpdateProjectModal = ({
     }
   };
 
-  const handleScheduleChange = (data) => {
-    setScheduleTableData(data);
-  };
+  // Handle schedule changes for both internal and non-internal projects
+  const handleScheduleChange = useCallback(
+    (data) => {
+      const isInternal = ["1", "4"].includes(projectType);
+      if (isInternal) {
+        setInternalScheduleDataState(data);
+      } else {
+        setScheduleTableData(data);
+      }
+    },
+    [projectType]
+  );
 
   const onSubmit = async (data) => {
     try {
@@ -349,17 +374,54 @@ const UpdateProjectModal = ({
           await uploadDocuments(projectData.id, localFiles);
         }
 
-        // Update schedule if changed
-        if (scheduleTableData.length > 0) {
-          await axiosInstance.post(`/data-management/upsertSchedulePlan`, {
-            projectId: projectData.id,
-            schedule: scheduleTableData.map((phase) => ({
-              phaseId: phase.phaseId,
-              durationDays: phase.durationDays,
-              startDate: phase.startDate,
-              endDate: phase.endDate,
-            })),
-          });
+        // Update schedule based on project type
+        const isInternal = ["1", "4"].includes(projectType);
+        if (isInternal && internalScheduleDataState.length > 0) {
+          const internalScheduleResponse = await axiosInstance.post(
+            `/data-management/upsertInternalSchedulePlan`,
+            {
+              projectId: projectData.id,
+              schedule: internalScheduleDataState.map((phase) => ({
+                phaseId: phase.id, // Use id to match InternalSchedulePlanSection
+                durationDays: phase.durationDays,
+                startDate: phase.startDate,
+                endDate: phase.endDate,
+              })),
+            }
+          );
+
+          if (
+            internalScheduleResponse.data &&
+            internalScheduleResponse.data.status !== "success"
+          ) {
+            throw new Error(
+              internalScheduleResponse.data?.message ||
+                "Failed to save internal schedule plan"
+            );
+          }
+        } else if (scheduleTableData.length > 0) {
+          const schedulePlanResponse = await axiosInstance.post(
+            `/data-management/upsertSchedulePlan`,
+            {
+              projectId: projectData.id,
+              schedule: scheduleTableData.map((phase) => ({
+                phaseId: phase.phaseId,
+                durationDays: phase.durationDays,
+                startDate: phase.startDate,
+                endDate: phase.endDate,
+              })),
+            }
+          );
+
+          if (
+            schedulePlanResponse.data &&
+            schedulePlanResponse.data.status !== "success"
+          ) {
+            throw new Error(
+              schedulePlanResponse.data?.message ||
+                "Failed to save schedule plan"
+            );
+          }
         }
 
         toast.success("Project updated successfully!");
@@ -400,7 +462,6 @@ const UpdateProjectModal = ({
         dept.id === deptId ? { ...dept, checked: !dept.checked } : dept
       )
     );
-    // Update form value with array of checked department IDs
     const updatedCheckedIds = departments
       .map((dept) =>
         dept.id === deptId ? { ...dept, checked: !dept.checked } : dept
@@ -909,13 +970,23 @@ const UpdateProjectModal = ({
           {/* Schedule Plan */}
           {(shouldShowSection("schedule") ||
             shouldShowSection("internalSchedule")) && (
-            <UpdateSchedulePlanSection
-              projectId={projectData.id}
-              budget={watch("approved_budget")}
-              onScheduleChange={handleScheduleChange}
-              projectData={projectData}
-              projectType={projectType}
-            />
+            <div>
+              {["1", "4"].includes(projectType) ? (
+                <InternalSchedulePlanSection
+                  onScheduleChange={handleScheduleChange}
+                  internalScheduleData={internalScheduleData}
+                  projectId={projectData.id} // Pass projectId for fetching existing data if needed
+                />
+              ) : (
+                <UpdateSchedulePlanSection
+                  projectId={projectData.id}
+                  budget={watch("approved_budget")}
+                  onScheduleChange={handleScheduleChange}
+                  projectData={projectData}
+                  projectType={projectType}
+                />
+              )}
+            </div>
           )}
 
           {/* Documents Section */}
@@ -924,7 +995,8 @@ const UpdateProjectModal = ({
               projectId={projectData.id}
               projectPhaseId={currentPhase}
               phaseName={
-                projectPhases.find((p) => p.id === parseInt(currentPhase))?.name
+                projectPhases.find((p) => p.id === parseInt(currentPhase))
+                  ?.name || "Unknown"
               }
               formMethods={{ setValue, watch }}
               localFiles={localFiles}

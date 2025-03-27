@@ -57,6 +57,8 @@ const {
   getSchedulePlan,
   upsertSchedulePlan,
   getSchedulePhases,
+  upsertInternalSchedulePlan,
+  getInternalSchedulePlan,
 } = require("../controllers/schedulePlanController");
 
 const {
@@ -132,6 +134,7 @@ router.post("/getPhaseDurationsByBudget", getPhaseDurationsByBudget);
 router.post("/updateProjectApproval", updateProjectApprovalbyDeputy);
 
 router.post("/upsertSchedulePlan", upsertSchedulePlan);
+router.post("/upsertInternalSchedulePlan", upsertInternalSchedulePlan);
 
 router.post("/getInitiativeWithRelatedData", getInitiativeWithAllRelatedData);
 router.post("/getPortfolioWithRelatedData", getPortfolioWithAllRelatedData);
@@ -161,6 +164,8 @@ router.post("/getSchedulePlan", getSchedulePlan);
 
 router.post("/addBeneficiaryDepartments", addBeneficiaryDepartments);
 router.post("/getBeneficiaryDepartments", getBeneficiaryDepartments);
+
+router.post("/getInternalSchedulePlan", getInternalSchedulePlan);
 
 router.post(
   "/createProjectCreationTaskForDeputy",
