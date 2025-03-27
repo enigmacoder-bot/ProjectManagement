@@ -86,22 +86,22 @@ const getData = async (req, res) => {
   }
 };
 
-//  @Description retrieve filtered Table data(sorting,ordering,filtering table records)
-//  @Route site.com/data-management/filtereddata
+// @Description retrieve filtered Table data (sorting, ordering, filtering table records)
+// @Route site.com/data-management/filtereddata
 const getFilteredData = async (req, res) => {
   const {
     tableName,
-    filters,
+    filters = {}, // Default to empty object if not provided
     page = 1,
-    limit = 4,
-    sort,
+    limit = 7, // Updated to match your query log (LIMIT 7)
+    sort = {}, // Default to empty object if not provided
     dateFilter,
   } = req.body;
 
-  if (!tableName || !filters || typeof filters !== "object") {
+  if (!tableName) {
     return res.status(400).json({
       status: "failure",
-      message: "Required field missing: tableName, filters must be an object",
+      message: "Required field missing: tableName",
       result: null,
     });
   }
@@ -141,51 +141,38 @@ const getFilteredData = async (req, res) => {
     });
 
     // Handle date filtering
-    // Assuming you have a column named "created_at" or similar that stores timestamps
-    // You may need to adjust this column name based on your schema
     if (dateFilter) {
-      const dateColumn = "created_at"; // Change this to your actual date column name
-
+      const dateColumn = "created_at"; // Adjust to your actual date column
       let startDate, endDate;
       const today = new Date();
-      today.setHours(23, 59, 59, 999); // End of today
+      today.setHours(23, 59, 59, 999);
 
       switch (dateFilter) {
         case "Today":
           startDate = new Date(today);
-          startDate.setHours(0, 0, 0, 0); // Start of today
-
+          startDate.setHours(0, 0, 0, 0);
           whereConditions.push(
             `"${dateColumn}" >= $${whereConditions.length + 1}`
           );
           queryParams.push(startDate.toISOString());
-
           whereConditions.push(
             `"${dateColumn}" <= $${whereConditions.length + 1}`
           );
           queryParams.push(today.toISOString());
           break;
-        case "thisWeek": // Changed from "last7days"
-          // Get start of current week (Monday)
+        case "thisWeek":
           startDate = new Date(today);
-          const dayOfWeek = startDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-          const diff =
-            dayOfWeek <= 1
-              ? dayOfWeek + 6 // Handle Sunday/Monday
-              : dayOfWeek - 1; // All other days
+          const dayOfWeek = startDate.getDay();
+          const diff = dayOfWeek <= 1 ? dayOfWeek + 6 : dayOfWeek - 1;
           startDate.setDate(today.getDate() - diff);
           startDate.setHours(0, 0, 0, 0);
-
-          // Get end of current week (Sunday)
           endDate = new Date(startDate);
           endDate.setDate(startDate.getDate() + 6);
           endDate.setHours(23, 59, 59, 999);
-
           whereConditions.push(
             `"${dateColumn}" >= $${whereConditions.length + 1}`
           );
           queryParams.push(startDate.toISOString());
-
           whereConditions.push(
             `"${dateColumn}" <= $${whereConditions.length + 1}`
           );
@@ -193,53 +180,42 @@ const getFilteredData = async (req, res) => {
           break;
         case "This Month":
           startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-          startDate.setHours(0, 0, 0, 0); // Start of the current month
-
+          startDate.setHours(0, 0, 0, 0);
           whereConditions.push(
             `"${dateColumn}" >= $${whereConditions.length + 1}`
           );
           queryParams.push(startDate.toISOString());
-
           whereConditions.push(
             `"${dateColumn}" <= $${whereConditions.length + 1}`
           );
           queryParams.push(today.toISOString());
           break;
-
         case "last2months":
           startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-          startDate.setHours(0, 0, 0, 0); // Start of previous month
-
+          startDate.setHours(0, 0, 0, 0);
           whereConditions.push(
             `"${dateColumn}" >= $${whereConditions.length + 1}`
           );
           queryParams.push(startDate.toISOString());
-
           whereConditions.push(
             `"${dateColumn}" <= $${whereConditions.length + 1}`
           );
           queryParams.push(today.toISOString());
           break;
-
         case "Last 3 Months":
           startDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-          startDate.setHours(0, 0, 0, 0); // Start of 2 months ago
-
+          startDate.setHours(0, 0, 0, 0);
           whereConditions.push(
             `"${dateColumn}" >= $${whereConditions.length + 1}`
           );
           queryParams.push(startDate.toISOString());
-
           whereConditions.push(
             `"${dateColumn}" <= $${whereConditions.length + 1}`
           );
           queryParams.push(today.toISOString());
           break;
-
-        // "all" case doesn't need any date filtering
         case "all":
         default:
-          // No date filter applied
           break;
       }
     }
@@ -247,24 +223,37 @@ const getFilteredData = async (req, res) => {
     // Pagination
     const offset = (page - 1) * limit;
 
-    // Sorting - safe way to handle ORDER BY
+    // Sorting - Enhanced validation
     let orderByClause = "";
     if (sort && typeof sort === "object" && Object.keys(sort).length > 0) {
       const validDirections = ["ASC", "DESC", "asc", "desc"];
       const sortParts = [];
 
       Object.entries(sort).forEach(([column, direction]) => {
+        // Ensure column is defined and valid, and direction is valid
         if (
+          column &&
+          column !== "undefined" &&
           /^[a-zA-Z0-9_]+$/.test(column) &&
+          direction &&
+          direction !== "undefined" &&
           validDirections.includes(String(direction).toUpperCase())
         ) {
           sortParts.push(`"${column}" ${String(direction).toUpperCase()}`);
+        } else {
+          console.warn(
+            `Invalid sort parameter: column=${column}, direction=${direction}`
+          );
         }
       });
 
       if (sortParts.length > 0) {
         orderByClause = `ORDER BY ${sortParts.join(", ")}`;
+      } else {
+        console.log("No valid sort parameters provided; skipping ORDER BY");
       }
+    } else {
+      console.log("Sort parameter is empty or invalid; skipping ORDER BY");
     }
 
     // Build the base query
@@ -285,19 +274,18 @@ const getFilteredData = async (req, res) => {
       queryParams.length + 2
     }`;
     queryParams.push(limit, offset);
-    console.log(queryText);
-    console.log(queryParams);
+
+    console.log("Generated Query:", queryText);
+    console.log("Query Parameters:", queryParams);
+
     // Execute the query
     const result = await sql.unsafe(queryText, queryParams);
 
     // Get total count for pagination
-    // We need to calculate this separately to know the total number of matching records
     let countQueryText = `SELECT COUNT(*) FROM "${tableName}"`;
     if (whereConditions.length > 0) {
       countQueryText += ` WHERE ${whereConditions.join(" AND ")}`;
     }
-
-    // We exclude the limit and offset from the count query
     const countQueryParams = queryParams.slice(0, -2);
     const countResult = await sql.unsafe(countQueryText, countQueryParams);
     const totalCount = parseInt(countResult[0].count);
@@ -314,11 +302,11 @@ const getFilteredData = async (req, res) => {
       },
     });
   } catch (e) {
-    console.log(e);
+    console.error("Error in getFilteredData:", e);
     res.status(500).json({
       status: "failure",
       message: "Error in retrieving filtered data",
-      result: e,
+      result: e.message,
     });
   }
 };

@@ -14,6 +14,7 @@ const ProjectModal = ({
   showButtons = true,
   title = "Add a Project",
   readOnly = false,
+  onProjectAdded,
 }) => {
   const [activeSection, setActiveSection] = useState("all");
   const [viewMode, setViewMode] = useState("weeks");
@@ -502,6 +503,7 @@ const ProjectModal = ({
         });
 
         toast.success("Project saved as draft successfully!");
+        onProjectAdded();
         if (onClose) onClose();
       } catch (error) {
         console.error("Error saving draft:", error);
@@ -541,6 +543,7 @@ const ProjectModal = ({
 
         if (taskResponse.data && taskResponse.data.status === "success") {
           toast.success("Project saved and sent for approval successfully!");
+          onProjectAdded();
           if (onClose) onClose();
         } else {
           throw new Error(

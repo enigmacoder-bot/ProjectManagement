@@ -462,6 +462,12 @@ const DataManagementPage = () => {
     return activeTab.endsWith("s") ? activeTab.slice(0, -1) : activeTab;
   };
 
+  // Handle project addition
+  const handleProjectAdded = () => {
+    setRefreshTrigger((prev) => prev + 1); // Trigger refresh
+    setShowProjectModal(false); // Close modal
+  };
+
   // Handle add button click - now opens the appropriate form
   const handleAddButtonClick = () => {
     if (activeTab === "documents") {
@@ -678,7 +684,10 @@ const DataManagementPage = () => {
                 >
                   <X size={24} />
                 </button>
-                <ProjectModal onClose={() => setShowProjectModal(false)} />
+                <ProjectModal
+                  onClose={() => setShowProjectModal(false)}
+                  onProjectAdded={handleProjectAdded}
+                />
               </div>
             </div>
           </div>
