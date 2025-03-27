@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { ChevronUp } from "lucide-react";
-import Datepicker from "react-tailwindcss-datepicker";
 import { Controller, useForm } from "react-hook-form";
 import axios from "axios";
 import { addDays, format } from "date-fns";
 import { toast } from "sonner";
 import axiosInstance from "../axiosInstance";
+import DatePicker from "react-datepicker"; // Import react-datepicker
+import "react-datepicker/dist/react-datepicker.css"; // Import CSS
 
 const PORT = import.meta.env.VITE_PORT;
 
@@ -39,7 +40,7 @@ const SchedulePlanSection = ({
     setValue,
   } = useForm({
     defaultValues: {
-      executionStartDate: null,
+      executionStartDate: null, // Default to null, updated later if needed
       executionDuration: "28 days", // Default to 4 weeks in days
       maintenanceDate: null,
     },
@@ -63,7 +64,7 @@ const SchedulePlanSection = ({
           id: 1,
           mainPhase: "Planning",
           subPhase: "Prepare scope",
-          duration: "28 days", // 4 weeks in days
+          duration: "28 days",
           durationDays: 28,
           startDate: null,
           endDate: null,
@@ -72,7 +73,7 @@ const SchedulePlanSection = ({
           id: 2,
           mainPhase: "Execution",
           subPhase: "Execute phase",
-          duration: "28 days", // 4 weeks in days
+          duration: "28 days",
           durationDays: 28,
           startDate: null,
           endDate: null,
@@ -84,9 +85,7 @@ const SchedulePlanSection = ({
   // Fetch phases with default durations based on budget
   useEffect(() => {
     const fetchPhases = async () => {
-      if (!budget) {
-        return;
-      }
+      if (!budget) return;
 
       try {
         const response = await axiosInstance.post(
@@ -96,18 +95,13 @@ const SchedulePlanSection = ({
         if (response.data.status === "success") {
           setPhases(response.data.result);
           const initialSchedule = response.data.result.map((phase) => {
-            if (!phase.duration_days) {
-              console.warn(
-                `No duration found for phase ${phase.phase_name} in budget range. Defaulting to 7 days.`
-              );
-            }
-            const durationDays = phase.duration_days || 7; // Default to 7 days if not set
+            const durationDays = phase.duration_days || 7;
             return {
               phaseId: phase.id,
               mainPhase: phase.main_phase,
               subPhase: phase.phase_name,
-              duration: convertDuration(durationDays, activeTab), // Display in the current tab's unit
-              durationDays: durationDays,
+              duration: convertDuration(durationDays, activeTab),
+              durationDays,
               startDate: null,
               endDate: null,
             };
@@ -216,7 +210,7 @@ const SchedulePlanSection = ({
       }
     };
     fetchPhases();
-  }, [budget, activeTab]); // Include activeTab to update display format
+  }, [budget, activeTab]);
 
   // Fetch existing schedule plan for the project
   useEffect(() => {
@@ -226,9 +220,7 @@ const SchedulePlanSection = ({
       try {
         const response = await axiosInstance.post(
           `/data-management/getSchedulePlan`,
-          {
-            params: { projectId },
-          }
+          { params: { projectId } }
         );
         if (
           response.data.status === "success" &&
@@ -261,7 +253,7 @@ const SchedulePlanSection = ({
     };
 
     fetchSchedulePlan();
-  }, [projectId, setValue, activeTab]); // Include activeTab to update display format
+  }, [projectId, setValue, activeTab]);
 
   // Calculate dates based on execution start date
   useEffect(() => {
@@ -394,7 +386,6 @@ const SchedulePlanSection = ({
 
   const handleInternalDurationChange = (id, newDuration) => {
     const durationDays = convertToDays(newDuration);
-
     const updatedSchedule = internalSchedule.map((phase) =>
       phase.id === id
         ? {
@@ -404,7 +395,6 @@ const SchedulePlanSection = ({
           }
         : phase
     );
-
     setInternalSchedule(updatedSchedule);
 
     if (executionStartDate) {
@@ -415,7 +405,6 @@ const SchedulePlanSection = ({
 
       const tempSchedule = [...updatedSchedule];
       const executionPhase = tempSchedule[executionPhaseIndex];
-
       const executionEndDate = new Date(executionStartDate);
       const phaseStartDate = addDuration(
         executionEndDate,
@@ -468,10 +457,7 @@ const SchedulePlanSection = ({
         : phase
     );
 
-    setDurationTypes((prevTypes) => ({
-      ...prevTypes,
-      [phaseId]: newType,
-    }));
+    setDurationTypes((prevTypes) => ({ ...prevTypes, [phaseId]: newType }));
 
     if (executionStartDate) {
       let currentEndDate = new Date(executionStartDate);
@@ -508,26 +494,25 @@ const SchedulePlanSection = ({
 
   const convertDuration = (durationDays, targetUnit) => {
     if (durationDays <= 0) return "0 days";
-    if (targetUnit === "B. Days") {
+    if (targetUnit === "B. Days")
       return `${durationDays} day${durationDays !== 1 ? "s" : ""}`;
-    } else if (targetUnit === "Weeks") {
+    if (targetUnit === "Weeks") {
       const weeks = Math.floor(durationDays / 7);
       const remainingDays = durationDays % 7;
-      if (remainingDays === 0) {
-        return `${weeks} week${weeks !== 1 ? "s" : ""}`;
-      }
-      return `${weeks} week${weeks !== 1 ? "s" : ""} ${remainingDays} day${
-        remainingDays !== 1 ? "s" : ""
-      }`;
-    } else if (targetUnit === "Months") {
+      return remainingDays === 0
+        ? `${weeks} week${weeks !== 1 ? "s" : ""}`
+        : `${weeks} week${weeks !== 1 ? "s" : ""} ${remainingDays} day${
+            remainingDays !== 1 ? "s" : ""
+          }`;
+    }
+    if (targetUnit === "Months") {
       const months = Math.floor(durationDays / 30);
       const remainingDays = durationDays % 30;
-      if (remainingDays === 0) {
-        return `${months} month${months !== 1 ? "s" : ""}`;
-      }
-      return `${months} month${months !== 1 ? "s" : ""} ${remainingDays} day${
-        remainingDays !== 1 ? "s" : ""
-      }`;
+      return remainingDays === 0
+        ? `${months} month${months !== 1 ? "s" : ""}`
+        : `${months} month${months !== 1 ? "s" : ""} ${remainingDays} day${
+            remainingDays !== 1 ? "s" : ""
+          }`;
     }
     return `${durationDays} days`;
   };
@@ -602,19 +587,19 @@ const SchedulePlanSection = ({
           <div className="grid grid-cols-3 gap-6 mb-4">
             <div>
               <label className="block text-sm font-semibold mb-1">
-                Execution targeted start date
+                Execution Targeted Start Date
               </label>
               <Controller
                 name="executionStartDate"
                 control={control}
                 render={({ field: { onChange, value } }) => (
-                  <Datepicker
-                    value={value ? { startDate: value, endDate: value } : null}
-                    onChange={(newValue) => onChange(newValue.startDate)}
-                    useRange={false}
-                    asSingle={true}
-                    displayFormat="DD-MMM-YYYY"
-                    placeholder="Select date"
+                  <DatePicker
+                    showIcon
+                    selected={value || null} // Use form value or null
+                    onChange={(date) => onChange(date)} // Update form state directly
+                    dateFormat="dd-MMM-yyyy" // Match your display format
+                    placeholderText="Select date"
+                    className="w-full p-2 border border-gray-300 rounded"
                   />
                 )}
               />
@@ -724,26 +709,26 @@ const SchedulePlanSection = ({
           <div className="grid grid-cols-3 gap-6 mb-4">
             <div>
               <label className="block text-sm font-semibold mb-1">
-                Execution targeted start date
+                Execution Targeted Start Date
               </label>
               <Controller
                 name="executionStartDate"
                 control={control}
                 render={({ field: { onChange, value } }) => (
-                  <Datepicker
-                    value={value ? { startDate: value, endDate: value } : null}
-                    onChange={(newValue) => onChange(newValue.startDate)}
-                    useRange={false}
-                    asSingle={true}
-                    displayFormat="DD-MMM-YYYY"
-                    placeholder="Select date"
+                  <DatePicker
+                    showIcon
+                    selected={value || null}
+                    onChange={(date) => onChange(date)}
+                    dateFormat="dd-MMM-yyyy"
+                    placeholderText="Select date"
+                    className="w-full p-2 border border-gray-300 rounded"
                   />
                 )}
               />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">
-                Execution duration <span className="text-red-500">*</span>
+                Execution Duration <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <Controller
@@ -779,7 +764,7 @@ const SchedulePlanSection = ({
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">
-                Maintenance & operation duration{" "}
+                Maintenance & Operation Duration{" "}
                 <span className="text-red-500">*</span>
               </label>
               <Controller
@@ -787,13 +772,13 @@ const SchedulePlanSection = ({
                 control={control}
                 rules={{ required: "Maintenance date is required" }}
                 render={({ field: { onChange, value } }) => (
-                  <Datepicker
-                    value={value ? { startDate: value, endDate: value } : null}
-                    onChange={(newValue) => onChange(newValue.startDate)}
-                    useRange={false}
-                    asSingle={true}
-                    displayFormat="DD-MMM-YYYY"
-                    placeholder="Select date"
+                  <DatePicker
+                    showIcon
+                    selected={value || null}
+                    onChange={(date) => onChange(date)}
+                    dateFormat="dd-MMM-yyyy"
+                    placeholderText="Select date"
+                    className="w-full p-2 border border-gray-300 rounded"
                   />
                 )}
               />

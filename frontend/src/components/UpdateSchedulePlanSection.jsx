@@ -194,6 +194,11 @@ const UpdateSchedulePlanSection = ({ projectData, onScheduleUpdate }) => {
     }
   };
 
+  // Handle schedule change
+  const handleScheduleChange = (data) => {
+    setScheduleTableData(data);
+  };
+
   // Handle schedule submission
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
@@ -223,8 +228,12 @@ const UpdateSchedulePlanSection = ({ projectData, onScheduleUpdate }) => {
     const schedulePayload = scheduleTableData.map((phase) => ({
       phaseId: phase.phaseId,
       durationDays: phase.durationDays,
-      startDate: format(new Date(phase.startDate), "yyyy-MM-dd"),
-      endDate: format(new Date(phase.endDate), "yyyy-MM-dd"),
+      startDate: phase.startDate
+        ? format(new Date(phase.startDate), "yyyy-MM-dd")
+        : null,
+      endDate: phase.endDate
+        ? format(new Date(phase.endDate), "yyyy-MM-dd")
+        : null,
     }));
     console.log("Schedule Update Payload:", schedulePayload);
 

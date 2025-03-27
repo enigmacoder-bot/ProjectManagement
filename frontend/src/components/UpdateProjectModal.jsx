@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { X, ChevronUp } from "lucide-react";
+import { X, ChevronDown, ChevronUp } from "lucide-react";
 import Datepicker from "react-tailwindcss-datepicker";
 import UpdateProjectDocumentSection from "./UpdateProjectDocumentSection";
 import { toast } from "sonner";
 import useAuthStore from "../store/authStore";
-import SchedulePlanSection from "./SchedulePlanSection";
 import UpdateSchedulePlanSection from "./UpdateSchedulePlanSection";
 import axiosInstance from "../axiosInstance";
-
-const PORT = import.meta.env.VITE_PORT;
 
 const UpdateProjectModal = ({
   onClose,
@@ -17,11 +14,10 @@ const UpdateProjectModal = ({
   onUpdate,
   showButtons = true,
   title = "Update Project",
+  readOnly = false,
 }) => {
   const [activeSection, setActiveSection] = useState("all");
   const [scheduleTableData, setScheduleTableData] = useState([]);
-  const { users, projectTypes, projectPhases, setDocuments, documents } =
-    useAuthStore();
   const [departments, setDepartments] = useState([]);
   const [initiatives, setInitiatives] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
@@ -29,8 +25,11 @@ const UpdateProjectModal = ({
   const [vendors, setVendors] = useState([]);
   const [objectives, setObjectives] = useState([]);
   const [localFiles, setLocalFiles] = useState([]);
-  const [phaseInfo, setPhaseInfo] = useState(null);
-  console.log("projectData", projectData);
+  const [selectedProgramDetails, setSelectedProgramDetails] = useState(null);
+
+  const { users, projectTypes, projectPhases, setDocuments, documents } =
+    useAuthStore();
+
   const {
     register,
     handleSubmit,
@@ -56,29 +55,32 @@ const UpdateProjectModal = ({
       vendor_id: projectData?.vendor_id?.toString() || "",
       beneficiaryDepartments: [],
       objectives: [],
-      planned_budget: projectData?.project_budget
-        ? parseInt(projectData.project_budget, 10).toString()
-        : "",
-      approved_budget: projectData?.approved_project_budget
-        ? parseInt(projectData.approved_project_budget, 10).toString()
-        : "",
+      planned_budget: projectData?.project_budget?.toString() || "",
+      approved_budget: projectData?.approved_project_budget?.toString() || "",
       execution_start_date: {
         startDate: projectData?.execution_start_date
           ? new Date(projectData.execution_start_date)
-          : null,
+          : new Date(),
         endDate: projectData?.execution_start_date
           ? new Date(projectData.execution_start_date)
-          : null,
+          : new Date(),
       },
-      execution_duration: projectData?.execution_duration || "",
-      maintenance_duration: projectData?.maintenance_duration || "",
+      execution_duration: projectData?.execution_duration || "4 weeks",
+      maintenance_duration: {
+        startDate: projectData?.maintenance_duration
+          ? new Date(projectData.maintenance_duration)
+          : new Date(),
+        endDate: projectData?.maintenance_duration
+          ? new Date(projectData.maintenance_duration)
+          : new Date(),
+      },
       internal_start_date: {
         startDate: projectData?.execution_start_date
           ? new Date(projectData.execution_start_date)
-          : null,
+          : new Date(),
         endDate: projectData?.execution_start_date
           ? new Date(projectData.execution_start_date)
-          : null,
+          : new Date(),
       },
       documents: projectData?.documents || [],
     },
@@ -86,83 +88,55 @@ const UpdateProjectModal = ({
 
   const projectType = watch("project_type_id");
   const currentPhase = watch("current_phase_id");
+  const selectedProgramId = watch("program_id");
 
-  // Fetch phase information when currentPhase changes
+  // Fetch departments and beneficiary departments
   useEffect(() => {
-    const fetchPhaseInfo = async () => {
-      if (!currentPhase) return;
-
+    const fetchDepartmentsAndBeneficiaries = async () => {
       try {
-        const response = await axiosInstance.post(
-          `/data-management/getProjectPhase`,
-          {
-            phase_id: currentPhase,
-          }
-        );
-
-        if (response.data.status === "success") {
-          setPhaseInfo(response.data.result);
-        } else {
-          console.error("Failed to fetch phase info:", response.data.message);
-        }
-      } catch (error) {
-        console.error("Error fetching phase info:", error);
-        toast.error("Failed to load phase information");
-      }
-    };
-
-    fetchPhaseInfo();
-  }, [currentPhase]);
-
-  // Fetch departments
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      try {
-        const response = await axiosInstance.post(
+        // Fetch all departments
+        const deptResponse = await axiosInstance.post(
           `/data-management/getDepartments`
         );
-        if (response.data.status === "success") {
-          const fetchedDepartments = response.data.result.map((dept) => ({
-            ...dept,
-            checked:
-              projectData?.beneficiary_departments?.some(
-                (d) => d.id === dept.id
-              ) || false,
-          }));
-          setDepartments(fetchedDepartments);
+        if (deptResponse.data.status !== "success") {
+          throw new Error("Failed to fetch departments");
         }
-      } catch (error) {
-        console.error("Error fetching departments:", error);
-        toast.error("Failed to load departments");
-      }
-    };
 
-    fetchDepartments();
-  }, [projectData?.beneficiary_departments]);
-
-  // Fetch objectives
-  useEffect(() => {
-    const fetchObjectives = async () => {
-      try {
-        const response = await axiosInstance.post(
-          `/data-management/getObjectives`
+        // Fetch current beneficiary departments for this project
+        const beneficiaryResponse = await axiosInstance.post(
+          `/data-management/getBeneficiaryDepartments`,
+          { projectId: projectData.id }
         );
-        if (response.data.status === "success") {
-          const fetchedObjectives = response.data.result.map((obj) => ({
-            ...obj,
-            checked:
-              projectData?.objectives?.some((o) => o.id === obj.id) || false,
-          }));
-          setObjectives(fetchedObjectives);
+        if (beneficiaryResponse.data.status !== "success") {
+          throw new Error("Failed to fetch beneficiary departments");
         }
+
+        const beneficiaryDeptIds = beneficiaryResponse.data.result; // Array of department IDs
+
+        const fetchedDepartments = deptResponse.data.result.map((dept) => ({
+          id: dept.id,
+          name: dept.name,
+          arabic_name: dept.arabic_name,
+          checked: beneficiaryDeptIds.includes(dept.id),
+        }));
+
+        setDepartments(fetchedDepartments);
+        setValue(
+          "beneficiaryDepartments",
+          fetchedDepartments
+            .filter((dept) => dept.checked)
+            .map((dept) => dept.id)
+        ); // Set form value to array of checked IDs
       } catch (error) {
-        console.error("Error fetching objectives:", error);
-        toast.error("Failed to load objectives");
+        console.error("Error fetching departments or beneficiaries:", error);
+        toast.error("Failed to load departments or beneficiary data");
       }
     };
 
-    fetchObjectives();
-  }, [projectData?.objectives]);
+    if (projectData?.id) {
+      fetchDepartmentsAndBeneficiaries();
+    }
+  }, [projectData?.id, setValue]);
 
   // Fetch initiatives
   useEffect(() => {
@@ -179,7 +153,6 @@ const UpdateProjectModal = ({
         toast.error("Failed to load initiatives");
       }
     };
-
     fetchInitiatives();
   }, []);
 
@@ -198,7 +171,6 @@ const UpdateProjectModal = ({
         toast.error("Failed to load portfolios");
       }
     };
-
     fetchPortfolios();
   }, []);
 
@@ -217,7 +189,6 @@ const UpdateProjectModal = ({
         toast.error("Failed to load programs");
       }
     };
-
     fetchPrograms();
   }, []);
 
@@ -236,61 +207,70 @@ const UpdateProjectModal = ({
         toast.error("Failed to load vendors");
       }
     };
-
     fetchVendors();
   }, []);
 
-  //fetch beneficiary departments
+  // Fetch objectives
   useEffect(() => {
-    const fetchBeneficiaryDepartments = async () => {
-      if (!projectId) return;
-
+    const fetchObjectives = async () => {
       try {
         const response = await axiosInstance.post(
-          `/data-management/getBeneficiaryDepartments`,
-          { projectId }
+          `/data-management/getObjectives`
         );
-
-        if (response.data && response.data.status === "success") {
-          const selectedDepartmentIds = response.data.result || [];
-          // Update the departments state to pre-select the ones in selectedDepartmentIds
-          setDepartments((prevDepartments) =>
-            prevDepartments.map((dept) => ({
-              ...dept,
-              checked: selectedDepartmentIds.includes(dept.id),
-            }))
-          );
-        } else {
-          toast.error("Failed to load beneficiary departments");
+        if (response.data.status === "success") {
+          const fetchedObjectives = response.data.result.map((obj) => ({
+            id: obj.id,
+            text: obj.name,
+            arabic_text: obj.arabic_name,
+            checked:
+              projectData?.objectives?.some((o) => o.id === obj.id) || false,
+          }));
+          setObjectives(fetchedObjectives);
+          setValue("objectives", fetchedObjectives);
         }
       } catch (error) {
-        console.error("Error fetching beneficiary departments:", error);
-        toast.error("Failed to load beneficiary departments");
+        console.error("Error fetching objectives:", error);
+        toast.error("Failed to load objectives");
       }
     };
+    fetchObjectives();
+  }, [projectData?.objectives, setValue]);
 
-    fetchBeneficiaryDepartments();
-  }, [projectId]);
+  // Fetch program details
+  const fetchProgramDetails = async (programId) => {
+    if (!programId) {
+      setSelectedProgramDetails(null);
+      return;
+    }
+    try {
+      const response = await axiosInstance.post(
+        "/data-management/getProgramDetails",
+        { program_id: programId }
+      );
+      if (response.data.status === "success") {
+        setSelectedProgramDetails(response.data.result);
+      }
+    } catch (error) {
+      console.error("Error fetching program details:", error);
+      toast.error("Failed to load program details");
+    }
+  };
 
-  // Fetch documents
   useEffect(() => {
-    const fetchDocuments = async () => {
-      if (!projectData?.id) return;
-      try {
-        const response = await axiosInstance.post(
-          `/data-management/getProjectDocuments`,
-          { project_id: projectData.id }
-        );
-        setDocuments(response.data.result || []);
-      } catch (error) {
-        console.error("Error fetching project documents:", error);
-        toast.error("Failed to load project documents");
-        setDocuments([]);
-      }
-    };
+    fetchProgramDetails(selectedProgramId);
+  }, [selectedProgramId]);
 
-    fetchDocuments();
-  }, [projectData?.id]);
+  // Fetch documents based on current phase
+  useEffect(() => {
+    if (currentPhase) {
+      const selectedPhase = projectPhases.find(
+        (phase) => phase.id === parseInt(currentPhase, 10)
+      );
+      if (selectedPhase) {
+        getCurrentPhaseDocumentTemplates(selectedPhase.name);
+      }
+    }
+  }, [currentPhase, projectPhases]);
 
   const getCurrentPhaseDocumentTemplates = async (phase) => {
     try {
@@ -298,12 +278,7 @@ const UpdateProjectModal = ({
         `/data-management/getCurrentPhaseDocumentTemplates`,
         { phase }
       );
-      console.log("result", result);
       setDocuments(result.data.data);
-      console.log("Fetched document templates:", result.data.data);
-
-      // Update both state and form value
-      // Return the documents for debugging
       return result.data.data;
     } catch (error) {
       console.error("Error fetching document templates:", error);
@@ -321,7 +296,6 @@ const UpdateProjectModal = ({
       const selectedDepartmentIds = departments
         .filter((dept) => dept.checked)
         .map((dept) => dept.id);
-      // Validate beneficiary departments
       if (selectedDepartmentIds.length === 0) {
         toast.error("At least one beneficiary department must be selected");
         return;
@@ -335,75 +309,59 @@ const UpdateProjectModal = ({
         name: data.name,
         arabic_name: data.arabic_name,
         description: data.description,
-        project_type_id: data.project_type_id
-          ? parseInt(data.project_type_id)
-          : null,
-        current_phase_id: data.current_phase_id
-          ? parseInt(data.current_phase_id)
-          : null,
-        initiative_id: data.initiative_id ? parseInt(data.initiative_id) : null,
-        portfolio_id: data.portfolio_id ? parseInt(data.portfolio_id) : null,
-        program_id: data.program_id ? parseInt(data.program_id) : null,
+        project_type_id: parseInt(data.project_type_id) || null,
+        current_phase_id: parseInt(data.current_phase_id) || null,
+        initiative_id: parseInt(data.initiative_id) || null,
+        portfolio_id: parseInt(data.portfolio_id) || null,
+        program_id: parseInt(data.program_id) || null,
         category: data.category,
-        project_manager_id: data.project_manager_id
-          ? parseInt(data.project_manager_id)
-          : null,
-        alternative_project_manager_id: data.alternative_project_manager_id
-          ? parseInt(data.alternative_project_manager_id)
-          : null,
-        vendor_id: data.vendor_id ? parseInt(data.vendor_id) : null,
+        project_manager_id: parseInt(data.project_manager_id) || null,
+        alternative_project_manager_id:
+          parseInt(data.alternative_project_manager_id) || null,
+        vendor_id: parseInt(data.vendor_id) || null,
         beneficiary_departments: selectedDepartmentIds,
         objectives: selectedObjectiveIds,
         project_budget: data.planned_budget
-          ? parseInt(data.planned_budget)
+          ? parseFloat(data.planned_budget)
           : null,
         approved_project_budget: data.approved_budget
-          ? parseInt(data.approved_budget)
+          ? parseFloat(data.approved_budget)
           : null,
         execution_start_date: data.execution_start_date?.startDate || null,
         execution_duration: data.execution_duration || null,
-        maintenance_duration: data.maintenance_duration || null,
+        maintenance_duration: data.maintenance_duration?.startDate || null,
       };
 
       const response = await axiosInstance.post(
         `/data-management/updateProject`,
-        {
-          id: projectData.id,
-          data: updatedProjectData,
-        }
+        { id: projectData.id, data: updatedProjectData }
       );
-      if (response.data && response.data.status === "success") {
-        // Step 2: Update beneficiary departments
-        const beneficiaryResponse = await axiosInstance.post(
-          `/data-management/addBeneficiaryDepartments`,
-          {
-            projectId,
-            departmentIds: selectedDepartmentIds,
-          }
-        );
 
-        if (beneficiaryResponse.data.status !== "success") {
-          throw new Error(
-            beneficiaryResponse.data.message ||
-              "Failed to update beneficiary departments"
-          );
-        }
-      }
       if (response.data.status === "success") {
+        // Update beneficiary departments
+        await axiosInstance.post(`/data-management/addBeneficiaryDepartments`, {
+          projectId: projectData.id,
+          departmentIds: selectedDepartmentIds,
+        });
+
+        // Upload documents if any
         if (localFiles.length > 0) {
           await uploadDocuments(projectData.id, localFiles);
         }
+
+        // Update schedule if changed
         if (scheduleTableData.length > 0) {
           await axiosInstance.post(`/data-management/upsertSchedulePlan`, {
             projectId: projectData.id,
-            schedule: scheduleTableData.map((plan) => ({
-              phaseId: plan.phaseId,
-              durationDays: plan.durationDays,
-              startDate: plan.startDate,
-              endDate: plan.endDate,
+            schedule: scheduleTableData.map((phase) => ({
+              phaseId: phase.phaseId,
+              durationDays: phase.durationDays,
+              startDate: phase.startDate,
+              endDate: phase.endDate,
             })),
           });
         }
+
         toast.success("Project updated successfully!");
         onUpdate(updatedProjectData);
         onClose();
@@ -424,13 +382,13 @@ const UpdateProjectModal = ({
       case "vendor":
         return ["2", "3", "4"].includes(projectType); // External (2), Strategic (3), PoC (4)
       case "budget":
-        if (projectType === "1") return false; // Internal (1)
-        if (["1", "2"].includes(currentPhase)) return false; // Planning (1), Bidding (2)
-        return ["2", "3"].includes(projectType); // External (2), Strategic (3)
+        if (projectType === "1") return false; // Internal
+        if (["1", "2"].includes(currentPhase)) return false; // Planning, Bidding
+        return ["2", "3"].includes(projectType); // External, Strategic
       case "schedule":
-        return ["2", "3"].includes(projectType); // External (2), Strategic (3)
+        return ["2", "3"].includes(projectType); // External, Strategic
       case "internalSchedule":
-        return ["1", "4"].includes(projectType); // Internal (1), PoC (4)
+        return ["1", "4"].includes(projectType); // Internal, PoC
       default:
         return true;
     }
@@ -442,6 +400,14 @@ const UpdateProjectModal = ({
         dept.id === deptId ? { ...dept, checked: !dept.checked } : dept
       )
     );
+    // Update form value with array of checked department IDs
+    const updatedCheckedIds = departments
+      .map((dept) =>
+        dept.id === deptId ? { ...dept, checked: !dept.checked } : dept
+      )
+      .filter((dept) => dept.checked)
+      .map((dept) => dept.id);
+    setValue("beneficiaryDepartments", updatedCheckedIds);
   };
 
   const toggleObjective = (objectiveId) => {
@@ -453,13 +419,17 @@ const UpdateProjectModal = ({
   };
 
   const uploadDocuments = async (projectId, localFiles) => {
-    for (const { index, file, template_id } of localFiles) {
+    for (const { index, file } of localFiles) {
       if (!file) continue;
       const formData = new FormData();
       formData.append("file", file);
       formData.append("project_id", projectId);
-      formData.append("template_id", template_id);
-      formData.append("phase", phaseInfo?.name || "Execution");
+      formData.append("template_id", documents[index].id);
+      formData.append(
+        "phase",
+        projectPhases.find((p) => p.id === parseInt(currentPhase))?.name ||
+          "Unknown"
+      );
 
       const response = await axiosInstance.post(
         `/data-management/addProjectDocument`,
@@ -473,8 +443,7 @@ const UpdateProjectModal = ({
     }
   };
 
-  // If projectData is not fully loaded, show a loading state
-  if (!projectData || !projectData.id || !projectData.project_budget) {
+  if (!projectData?.id) {
     return (
       <div className="flex flex-col rounded-lg border border-gray-200 shadow-md bg-white max-w-6xl mx-auto max-h-[90vh] p-4">
         <h2 className="text-xl font-semibold mb-4">{title}</h2>
@@ -498,12 +467,14 @@ const UpdateProjectModal = ({
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         <form onSubmit={handleSubmit(onSubmit)}>
+          {/* Project Information */}
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div>
               <label className="block text-sm font-semibold mb-1">
                 Project English Name <span className="text-red-500">*</span>
               </label>
               <input
+                readOnly={readOnly}
                 type="text"
                 className={`w-full p-2 border ${
                   errors.name ? "border-red-500" : "border-gray-300"
@@ -523,6 +494,7 @@ const UpdateProjectModal = ({
                 <span className="text-red-500">*</span> اسم المشروع بالعربي
               </label>
               <input
+                readOnly={readOnly}
                 type="text"
                 className={`w-full p-2 border ${
                   errors.arabic_name ? "border-red-500" : "border-gray-300"
@@ -543,13 +515,14 @@ const UpdateProjectModal = ({
               Project Description <span className="text-red-500">*</span>
             </label>
             <textarea
+              readOnly={readOnly}
               className={`w-full p-2 border ${
                 errors.description ? "border-red-500" : "border-gray-300"
               } rounded h-24`}
               {...register("description", {
                 required: "Project description is required",
               })}
-            ></textarea>
+            />
             {errors.description && (
               <p className="text-red-500 text-xs mt-1">
                 {errors.description.message}
@@ -561,28 +534,34 @@ const UpdateProjectModal = ({
               <label className="block text-sm font-semibold mb-1">
                 Project Type <span className="text-red-500">*</span>
               </label>
-              <Controller
-                name="project_type_id"
-                control={control}
-                rules={{ required: "Project type is required" }}
-                render={({ field }) => (
-                  <select
-                    className={`w-full p-2 border ${
-                      errors.project_type_id
-                        ? "border-red-500"
-                        : "border-gray-300"
-                    } rounded`}
-                    {...field}
-                  >
-                    <option value="">Select Project Type</option>
-                    {projectTypes.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              />
+              <div className="relative">
+                <Controller
+                  name="project_type_id"
+                  control={control}
+                  rules={{ required: "Project type is required" }}
+                  render={({ field }) => (
+                    <select
+                      disabled={readOnly}
+                      className={`w-full p-2 border ${
+                        errors.project_type_id
+                          ? "border-red-500"
+                          : "border-gray-300"
+                      } rounded appearance-none bg-white`}
+                      {...field}
+                    >
+                      <option value="">Select Project Type</option>
+                      {projectTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                  <ChevronDown size={16} />
+                </div>
+              </div>
               {errors.project_type_id && (
                 <p className="text-red-500 text-xs mt-1">
                   {errors.project_type_id.message}
@@ -593,28 +572,34 @@ const UpdateProjectModal = ({
               <label className="block text-sm font-semibold mb-1">
                 Project Current Phase <span className="text-red-500">*</span>
               </label>
-              <Controller
-                name="current_phase_id"
-                control={control}
-                rules={{ required: "Current phase is required" }}
-                render={({ field }) => (
-                  <select
-                    className={`w-full p-2 border ${
-                      errors.current_phase_id
-                        ? "border-red-500"
-                        : "border-gray-300"
-                    } rounded`}
-                    {...field}
-                  >
-                    <option value="">Select Current Phase</option>
-                    {projectPhases.map((phase) => (
-                      <option key={phase.id} value={phase.id}>
-                        {phase.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              />
+              <div className="relative">
+                <Controller
+                  name="current_phase_id"
+                  control={control}
+                  rules={{ required: "Current phase is required" }}
+                  render={({ field }) => (
+                    <select
+                      disabled={readOnly}
+                      className={`w-full p-2 border ${
+                        errors.current_phase_id
+                          ? "border-red-500"
+                          : "border-gray-300"
+                      } rounded appearance-none bg-white`}
+                      {...field}
+                    >
+                      <option value="">Select Current Phase</option>
+                      {projectPhases.map((phase) => (
+                        <option key={phase.id} value={phase.id}>
+                          {phase.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                  <ChevronDown size={16} />
+                </div>
+              </div>
               {errors.current_phase_id && (
                 <p className="text-red-500 text-xs mt-1">
                   {errors.current_phase_id.message}
@@ -622,125 +607,64 @@ const UpdateProjectModal = ({
               )}
             </div>
           </div>
-          <div className="mb-6">
-            <label className="block text-sm font-semibold mb-1">
-              Execution Start Date <span className="text-red-500">*</span>
-            </label>
-            <Controller
-              name="execution_start_date"
-              control={control}
-              rules={{ required: "Execution start date is required" }}
-              render={({ field }) => (
-                <Datepicker
-                  asSingle={true}
-                  value={field.value}
-                  onChange={(newValue) => field.onChange(newValue)}
-                  inputClassName={`w-full p-2 border ${
-                    errors.execution_start_date
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  } rounded`}
-                />
-              )}
-            />
-            {errors.execution_start_date && (
-              <p className="text-red-500 text-xs mt-1">
-                {errors.execution_start_date.message}
-              </p>
-            )}
-          </div>
-          <div className="mb-6">
-            <label className="block text-sm font-semibold mb-1">
-              Execution Duration
-            </label>
-            <input
-              type="text"
-              className="w-full p-2 border border-gray-300 rounded"
-              {...register("execution_duration")}
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-sm font-semibold mb-1">
-              Maintenance Duration
-            </label>
-            <input
-              type="text"
-              className="w-full p-2 border border-gray-300 rounded"
-              {...register("maintenance_duration")}
-            />
-          </div>
+
+          {/* Project Categories */}
           {shouldShowSection("category") && (
             <div className="mb-6">
               <h3 className="font-semibold mb-4">Project Categories</h3>
-              <div className="grid grid-cols-2 gap-6 mb-4">
+              <div className="grid grid-cols-3 gap-6 mb-4">
                 <div>
                   <label className="block text-sm font-semibold mb-1">
-                    Initiative Name
+                    Program Name
                   </label>
-                  <Controller
-                    name="initiative_id"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        className="w-full p-2 border border-gray-300 rounded"
-                        {...field}
-                      >
-                        <option value="">Select Initiative</option>
-                        {initiatives.map((initiative) => (
-                          <option key={initiative.id} value={initiative.id}>
-                            {initiative.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  />
+                  <div className="relative">
+                    <Controller
+                      name="program_id"
+                      control={control}
+                      render={({ field }) => (
+                        <select
+                          disabled={readOnly}
+                          className="w-full p-2 border border-gray-300 rounded appearance-none bg-white"
+                          {...field}
+                        >
+                          <option value="">Select Program</option>
+                          {programs.map((program) => (
+                            <option key={program.id} value={program.id}>
+                              {program.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                      <ChevronDown size={16} />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">
                     Portfolio Name
                   </label>
-                  <Controller
-                    name="portfolio_id"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        className="w-full p-2 border border-gray-300 rounded"
-                        {...field}
-                      >
-                        <option value="">Select Portfolio</option>
-                        {portfolios.map((portfolio) => (
-                          <option key={portfolio.id} value={portfolio.id}>
-                            {portfolio.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                  <input
+                    type="text"
+                    className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                    value={selectedProgramDetails?.portfolio_name || ""}
+                    readOnly
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">
+                    Initiative Name
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                    value={selectedProgramDetails?.initiative_name || ""}
+                    readOnly
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-6 mb-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-1">
-                    Program Name
-                  </label>
-                  <Controller
-                    name="program_id"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        className="w-full p-2 border border-gray-300 rounded"
-                        {...field}
-                      >
-                        <option value="">Select Program</option>
-                        {programs.map((program) => (
-                          <option key={program.id} value={program.id}>
-                            {program.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  />
-                </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">
                     Project Category <span className="text-red-500">*</span>
@@ -753,6 +677,7 @@ const UpdateProjectModal = ({
                         rules={{ required: "Project category is required" }}
                         render={({ field }) => (
                           <input
+                            disabled={readOnly}
                             type="radio"
                             className="mr-2"
                             value="Capex"
@@ -769,6 +694,7 @@ const UpdateProjectModal = ({
                         control={control}
                         render={({ field }) => (
                           <input
+                            disabled={readOnly}
                             type="radio"
                             className="mr-2"
                             value="Opex"
@@ -789,6 +715,8 @@ const UpdateProjectModal = ({
               </div>
             </div>
           )}
+
+          {/* Assignee & Communication */}
           <div className="mb-6 border-t pt-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold">Assignee & Communication</h3>
@@ -801,28 +729,34 @@ const UpdateProjectModal = ({
                 <label className="block text-sm font-semibold mb-1">
                   Project Manager <span className="text-red-500">*</span>
                 </label>
-                <Controller
-                  name="project_manager_id"
-                  control={control}
-                  rules={{ required: "Project manager is required" }}
-                  render={({ field }) => (
-                    <select
-                      className={`w-full p-2 border ${
-                        errors.project_manager_id
-                          ? "border-red-500"
-                          : "border-gray-300"
-                      } rounded`}
-                      {...field}
-                    >
-                      <option value="">Select Project Manager</option>
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.first_name} {user.family_name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                />
+                <div className="relative">
+                  <Controller
+                    name="project_manager_id"
+                    control={control}
+                    rules={{ required: "Project manager is required" }}
+                    render={({ field }) => (
+                      <select
+                        disabled={readOnly}
+                        className={`w-full p-2 border ${
+                          errors.project_manager_id
+                            ? "border-red-500"
+                            : "border-gray-300"
+                        } rounded appearance-none bg-white`}
+                        {...field}
+                      >
+                        <option value="">Select Project Manager</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.first_name} {user.family_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                    <ChevronDown size={16} />
+                  </div>
+                </div>
                 {errors.project_manager_id && (
                   <p className="text-red-500 text-xs mt-1">
                     {errors.project_manager_id.message}
@@ -835,8 +769,9 @@ const UpdateProjectModal = ({
                 </label>
                 <div className="border border-gray-300 rounded p-2 max-h-40 overflow-y-auto">
                   {departments.map((dept) => (
-                    <div key={dept.id} className="flex items-center">
+                    <div key={dept.id} className="flex items-center mb-1">
                       <input
+                        disabled={readOnly}
                         type="checkbox"
                         id={`dept-${dept.id}`}
                         checked={dept.checked}
@@ -845,7 +780,7 @@ const UpdateProjectModal = ({
                       />
                       <label htmlFor={`dept-${dept.id}`} className="text-sm">
                         {dept.name}{" "}
-                        {dept.arabic_name ? `(${dept.arabic_name})` : ""}
+                        {dept.arabic_name && `(${dept.arabic_name})`}
                       </label>
                     </div>
                   ))}
@@ -857,53 +792,65 @@ const UpdateProjectModal = ({
                 <label className="block text-sm font-semibold mb-1">
                   Alternative Project Manager
                 </label>
-                <Controller
-                  name="alternative_project_manager_id"
-                  control={control}
-                  render={({ field }) => (
-                    <select
-                      className="w-full p-2 border border-gray-300 rounded"
-                      {...field}
-                    >
-                      <option value="">Select Alternative Manager</option>
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.first_name} {user.family_name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                />
+                <div className="relative">
+                  <Controller
+                    name="alternative_project_manager_id"
+                    control={control}
+                    render={({ field }) => (
+                      <select
+                        disabled={readOnly}
+                        className="w-full p-2 border border-gray-300 rounded appearance-none bg-white"
+                        {...field}
+                      >
+                        <option value="">Select Alternative Manager</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.first_name} {user.family_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                    <ChevronDown size={16} />
+                  </div>
+                </div>
               </div>
               {shouldShowSection("vendor") && (
                 <div>
                   <label className="block text-sm font-semibold mb-1">
                     Vendor Name
                   </label>
-                  <Controller
-                    name="vendor_id"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        className="w-full p-2 border border-gray-300 rounded"
-                        {...field}
-                      >
-                        <option value="">Select Vendor</option>
-                        {vendors.map((vendor) => (
-                          <option key={vendor.id} value={vendor.id}>
-                            {vendor.name}{" "}
-                            {vendor.arabic_name
-                              ? `(${vendor.arabic_name})`
-                              : ""}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  />
+                  <div className="relative">
+                    <Controller
+                      name="vendor_id"
+                      control={control}
+                      render={({ field }) => (
+                        <select
+                          disabled={readOnly}
+                          className="w-full p-2 border border-gray-300 rounded appearance-none bg-white"
+                          {...field}
+                        >
+                          <option value="">Select Vendor</option>
+                          {vendors.map((vendor) => (
+                            <option key={vendor.id} value={vendor.id}>
+                              {vendor.name}{" "}
+                              {vendor.arabic_name && `(${vendor.arabic_name})`}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                      <ChevronDown size={16} />
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
+
+          {/* Objectives and Budget */}
           <div className="mb-6 border-t pt-4">
             <h3 className="font-semibold mb-4">Objectives and Budget</h3>
             <div className="grid grid-cols-2 gap-6 mb-4">
@@ -915,6 +862,7 @@ const UpdateProjectModal = ({
                   {objectives.map((objective) => (
                     <div key={objective.id} className="flex items-center mb-1">
                       <input
+                        disabled={readOnly}
                         type="checkbox"
                         id={`obj-${objective.id}`}
                         checked={objective.checked}
@@ -923,9 +871,7 @@ const UpdateProjectModal = ({
                       />
                       <label htmlFor={`obj-${objective.id}`}>
                         {objective.text}{" "}
-                        {objective.arabic_text
-                          ? `(${objective.arabic_text})`
-                          : ""}
+                        {objective.arabic_text && `(${objective.arabic_text})`}
                       </label>
                     </div>
                   ))}
@@ -938,6 +884,7 @@ const UpdateProjectModal = ({
                       Project Planned Budget
                     </label>
                     <input
+                      readOnly={readOnly}
                       type="number"
                       className="w-full p-2 border border-gray-300 rounded"
                       {...register("planned_budget")}
@@ -948,6 +895,7 @@ const UpdateProjectModal = ({
                       Project Approved Budget
                     </label>
                     <input
+                      readOnly={readOnly}
                       type="number"
                       className="w-full p-2 border border-gray-300 rounded"
                       {...register("approved_budget")}
@@ -957,38 +905,37 @@ const UpdateProjectModal = ({
               )}
             </div>
           </div>
-          {/* Conditionally render SchedulePlanSection only when projectData is fully available */}
-          {shouldShowSection("schedule") &&
-            projectData?.id &&
-            projectData?.project_budget && (
-              // <SchedulePlanSection
-              //   projectId={projectData.id}
-              //   budget={projectData.approved_project_budget} // Pass budget directly from projectData
-              //   onScheduleChange={handleScheduleChange}
-              //   projectData={projectData} // Pass projectData for execution_start_date
-              // />
-              <UpdateSchedulePlanSection
-                projectId={projectData.id}
-                budget={projectData.approved_project_budget} // Pass budget directly from projectData
-                onScheduleChange={handleScheduleChange}
-                projectData={projectData}
-              />
-            )}
-          {currentPhase && phaseInfo && (
-            <div className="mb-6 border-t pt-4">
-              <UpdateProjectDocumentSection
-                projectId={projectData.id}
-                projectPhaseId={currentPhase}
-                phaseName={phaseInfo?.name}
-                formMethods={{ setValue, watch }}
-                localFiles={localFiles}
-                setLocalFiles={setLocalFiles}
-                getCurrentPhaseDocumentTemplates={
-                  getCurrentPhaseDocumentTemplates
-                }
-              />
-            </div>
+
+          {/* Schedule Plan */}
+          {(shouldShowSection("schedule") ||
+            shouldShowSection("internalSchedule")) && (
+            <UpdateSchedulePlanSection
+              projectId={projectData.id}
+              budget={watch("approved_budget")}
+              onScheduleChange={handleScheduleChange}
+              projectData={projectData}
+              projectType={projectType}
+            />
           )}
+
+          {/* Documents Section */}
+          <div className="mb-6 border-t pt-4">
+            <UpdateProjectDocumentSection
+              projectId={projectData.id}
+              projectPhaseId={currentPhase}
+              phaseName={
+                projectPhases.find((p) => p.id === parseInt(currentPhase))?.name
+              }
+              formMethods={{ setValue, watch }}
+              localFiles={localFiles}
+              setLocalFiles={setLocalFiles}
+              getCurrentPhaseDocumentTemplates={
+                getCurrentPhaseDocumentTemplates
+              }
+            />
+          </div>
+
+          {/* Form Footer */}
           {showButtons && (
             <div className="flex justify-end space-x-4 mt-6 border-t pt-4">
               <button

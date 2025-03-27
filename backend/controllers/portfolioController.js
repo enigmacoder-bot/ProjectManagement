@@ -28,14 +28,57 @@ const addPortfolio = async (req, res) => {
     const columns = Object.keys(data);
     const values = Object.values(data);
 
-    // Validate column names to prevent SQL injection
+    // Define allowed columns for portfolio table
+    const validColumns = [
+      "name",
+      "arabic_name",
+      "portfolio_manager",
+      "initiative_id",
+      "description",
+      "arabic_description",
+    ];
+
+    // Validate column names
     for (const column of columns) {
-      if (!/^[a-zA-Z0-9_]+$/.test(column)) {
+      if (!validColumns.includes(column)) {
         return res.status(400).json({
           status: "failure",
-          message: `Invalid column name: ${column}`,
+          message: `Invalid column name: ${column}. Allowed columns: ${validColumns.join(
+            ", "
+          )}`,
           result: null,
         });
+      }
+      // Additional validation for initiative_id
+      if (column === "initiative_id") {
+        if (!Number.isInteger(Number(data[column]))) {
+          return res.status(400).json({
+            status: "failure",
+            message: "initiative_id must be an integer",
+            result: null,
+          });
+        }
+        // Optional: Check if initiative exists
+        const initiativeCheck = await sql`
+          SELECT id FROM initiative WHERE id = ${data[column]}
+        `;
+        if (initiativeCheck.length === 0) {
+          return res.status(400).json({
+            status: "failure",
+            message: `Initiative with id ${data[column]} does not exist`,
+            result: null,
+          });
+        }
+      }
+      // Validation for portfolio_manager
+      if (column === "portfolio_manager") {
+        if (!Number.isInteger(Number(data[column]))) {
+          return res.status(400).json({
+            status: "failure",
+            message: "portfolio_manager must be an integer",
+            result: null,
+          });
+        }
       }
     }
 
@@ -43,10 +86,10 @@ const addPortfolio = async (req, res) => {
     const placeholders = columns.map((_, index) => `$${index + 1}`);
 
     const queryText = `
-        INSERT INTO portfolio (${columns.map((col) => `"${col}"`).join(", ")})
-        VALUES (${placeholders.join(", ")})
-        RETURNING *
-      `;
+      INSERT INTO portfolio (${columns.map((col) => `"${col}"`).join(", ")})
+      VALUES (${placeholders.join(", ")})
+      RETURNING *
+    `;
 
     // Execute the query
     const result = await sql.unsafe(queryText, values);
@@ -60,9 +103,8 @@ const addPortfolio = async (req, res) => {
   } catch (error) {
     console.error("Error adding portfolio:", error);
 
-    // Handle unique constraint violations or other specific errors
+    // Handle unique constraint violations
     if (error.code === "23505") {
-      // PostgreSQL unique violation code
       return res.status(409).json({
         status: "failure",
         message: "Portfolio with this identifier already exists",
@@ -72,12 +114,21 @@ const addPortfolio = async (req, res) => {
 
     // Handle foreign key constraint violations
     if (error.code === "23503") {
-      // PostgreSQL foreign key violation code
-      return res.status(409).json({
-        status: "failure",
-        message: "Referenced portfolio manager does not exist",
-        result: error.detail || error,
-      });
+      const detail = error.detail || "";
+      if (detail.includes("portfolio_manager")) {
+        return res.status(400).json({
+          status: "failure",
+          message: "Referenced portfolio manager does not exist",
+          result: detail,
+        });
+      }
+      if (detail.includes("initiative_id")) {
+        return res.status(400).json({
+          status: "failure",
+          message: "Referenced initiative does not exist",
+          result: detail,
+        });
+      }
     }
 
     // Handle other errors
@@ -314,4 +365,9 @@ const getPortfolios = async (req, res) => {
   }
 };
 
-module.exports = { addPortfolio, updatePortfolio, deletePortfolio, getPortfolios };
+module.exports = {
+  addPortfolio,
+  updatePortfolio,
+  deletePortfolio,
+  getPortfolios,
+};

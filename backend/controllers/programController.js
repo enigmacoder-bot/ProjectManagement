@@ -4,9 +4,17 @@ const sql = require("../database/db");
 //  @Route site.com/data-management/addprogram
 const addProgram = async (req, res) => {
   // Check if data exists in the request body
-  console.log('program body', req.body);
+  console.log("program body", req.body);
 
-  // Flatten the data object from the request body
+  if (!req.body || !req.body.data || typeof req.body.data !== "object") {
+    return res.status(400).json({
+      status: "failure",
+      message: "Data missing or invalid format",
+      result: null,
+    });
+  }
+
+  // Flatten and process the data object from the request body
   const data = { ...req.body.data };
 
   // Remove userId from data as it's not a column in the program table
@@ -15,36 +23,30 @@ const addProgram = async (req, res) => {
   }
 
   // Map form field names to database column names
-  if (data.programEnglish) {
-    data.name = data.programEnglish;
-    delete data.programEnglish;
-  }
+  const fieldMappings = {
+    programEnglish: "name",
+    programArabic: "arabic_name",
+    programManager: "program_manager",
+    descriptionEnglish: "description",
+    descriptionArabic: "arabic_description",
+  };
 
-  if (data.programArabic) {
-    data.arabic_name = data.programArabic;
-    delete data.programArabic;
-  }
+  Object.keys(fieldMappings).forEach((formField) => {
+    if (data[formField]) {
+      data[fieldMappings[formField]] = data[formField];
+      delete data[formField];
+    }
+  });
 
-  if (data.programManager) {
-    data.program_manager = parseInt(data.programManager, 10);
-    delete data.programManager;
+  // Ensure numeric fields are parsed correctly
+  if (data.program_manager) {
+    data.program_manager = parseInt(data.program_manager, 10);
   }
-
   if (data.portfolio_id) {
     data.portfolio_id = parseInt(data.portfolio_id, 10);
   }
 
-  if (data.descriptionEnglish) {
-    data.description = data.descriptionEnglish;
-    delete data.descriptionEnglish;
-  }
-
-  if (data.descriptionArabic) {
-    data.arabic_description = data.descriptionArabic;
-    delete data.descriptionArabic;
-  }
-
-  console.log('Processed data:', data);
+  console.log("Processed data:", data);
 
   // Make sure we have at least some data to insert
   if (Object.keys(data).length === 0) {
@@ -56,18 +58,63 @@ const addProgram = async (req, res) => {
   }
 
   try {
+    // Define allowed columns for program table
+    const validColumns = [
+      "name",
+      "arabic_name",
+      "program_manager",
+      "portfolio_id",
+      "description",
+      "arabic_description",
+    ];
+
     // Extract column names and values from the data object
     const columns = Object.keys(data);
     const values = Object.values(data);
 
-    // Validate column names to prevent SQL injection
+    // Validate column names and values
     for (const column of columns) {
-      if (!/^[a-zA-Z0-9_]+$/.test(column)) {
+      if (!validColumns.includes(column)) {
         return res.status(400).json({
           status: "failure",
-          message: `Invalid column name: ${column}`,
+          message: `Invalid column name: ${column}. Allowed columns: ${validColumns.join(
+            ", "
+          )}`,
           result: null,
         });
+      }
+
+      // Additional validation for portfolio_id
+      if (column === "portfolio_id") {
+        if (!Number.isInteger(data[column])) {
+          return res.status(400).json({
+            status: "failure",
+            message: "portfolio_id must be an integer",
+            result: null,
+          });
+        }
+        // Optional: Check if portfolio exists
+        const portfolioCheck = await sql`
+          SELECT id FROM portfolio WHERE id = ${data[column]}
+        `;
+        if (portfolioCheck.length === 0) {
+          return res.status(400).json({
+            status: "failure",
+            message: `Portfolio with id ${data[column]} does not exist`,
+            result: null,
+          });
+        }
+      }
+
+      // Validation for program_manager
+      if (column === "program_manager") {
+        if (!Number.isInteger(data[column])) {
+          return res.status(400).json({
+            status: "failure",
+            message: "program_manager must be an integer",
+            result: null,
+          });
+        }
       }
     }
 
@@ -75,10 +122,10 @@ const addProgram = async (req, res) => {
     const placeholders = columns.map((_, index) => `$${index + 1}`);
 
     const queryText = `
-        INSERT INTO program (${columns.map((col) => `"${col}"`).join(", ")})
-        VALUES (${placeholders.join(", ")})
-        RETURNING *
-      `;
+      INSERT INTO program (${columns.map((col) => `"${col}"`).join(", ")})
+      VALUES (${placeholders.join(", ")})
+      RETURNING *
+    `;
 
     // Execute the query
     const result = await sql.unsafe(queryText, values);
@@ -92,9 +139,8 @@ const addProgram = async (req, res) => {
   } catch (error) {
     console.error("Error adding program:", error);
 
-    // Handle unique constraint violations or other specific errors
+    // Handle unique constraint violations
     if (error.code === "23505") {
-      // PostgreSQL unique violation code
       return res.status(409).json({
         status: "failure",
         message: "Program with this identifier already exists",
@@ -104,12 +150,21 @@ const addProgram = async (req, res) => {
 
     // Handle foreign key constraint violations
     if (error.code === "23503") {
-      // PostgreSQL foreign key violation code
-      return res.status(409).json({
-        status: "failure",
-        message: "Referenced program manager does not exist",
-        result: error.detail || error,
-      });
+      const detail = error.detail || "";
+      if (detail.includes("program_manager")) {
+        return res.status(400).json({
+          status: "failure",
+          message: "Referenced program manager does not exist",
+          result: detail,
+        });
+      }
+      if (detail.includes("portfolio_id")) {
+        return res.status(400).json({
+          status: "failure",
+          message: "Referenced portfolio does not exist",
+          result: detail,
+        });
+      }
     }
 
     // Handle other errors
@@ -347,4 +402,70 @@ const getPrograms = async (req, res) => {
   }
 };
 
-module.exports = { addProgram, updateProgram, deleteProgram, getPrograms };
+// @Description Get details of a specific program including linked portfolio and initiative
+// @Route POST site.com/data-management/getProgramDetails
+const getProgramDetails = async (req, res) => {
+  // Check if program_id is provided in the request body
+  if (!req.body || !req.body.program_id) {
+    return res.status(400).json({
+      status: "failure",
+      message: "Program ID is required",
+      result: null,
+    });
+  }
+
+  const { program_id } = req.body;
+
+  try {
+    // Build the query to get program details with portfolio and initiative
+    const queryText = `
+      SELECT 
+        p.id AS program_id,
+        p.name AS program_name,
+        p.arabic_name AS program_arabic_name,
+        p.portfolio_id,
+        port.name AS portfolio_name,
+        port.arabic_name AS portfolio_arabic_name,
+        port.initiative_id,
+        i.name AS initiative_name,
+        i.arabic_name AS initiative_arabic_name
+      FROM program p
+      LEFT JOIN portfolio port ON p.portfolio_id = port.id
+      LEFT JOIN initiative i ON port.initiative_id = i.id
+      WHERE p.id = ${program_id}
+    `;
+
+    // Execute the query using sql.unsafe
+    const result = await sql.unsafe(queryText);
+
+    if (result.length === 0) {
+      return res.status(404).json({
+        status: "failure",
+        message: `Program with ID ${program_id} not found`,
+        result: null,
+      });
+    }
+
+    // Return success response with program details
+    return res.status(200).json({
+      status: "success",
+      message: "Program details retrieved successfully",
+      result: result[0], // Return the first (and only) row
+    });
+  } catch (error) {
+    console.error("Error fetching program details:", error);
+    return res.status(500).json({
+      status: "failure",
+      message: "Error fetching program details",
+      result: error.message || error,
+    });
+  }
+};
+
+module.exports = {
+  addProgram,
+  updateProgram,
+  deleteProgram,
+  getPrograms,
+  getProgramDetails,
+};

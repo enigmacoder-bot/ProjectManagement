@@ -394,7 +394,8 @@ const TableData = ({
                       <td colSpan={visibleColumns.length + 1} className="p-0">
                         <InitiativeAccordion
                           tableName="initiative"
-                          data={item}
+                          dat
+                          a={item}
                           title="Initiative details"
                         />
                       </td>

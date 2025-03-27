@@ -4,6 +4,8 @@ import { Zap, Users, ShoppingBag, BarChart2 } from "lucide-react";
 const TableConfig = ({
   children,
   updateALLorMyTaskRetreival,
+  openTaskCount,
+  delayedTaskCount,
   updateOpenorClosedTaskRetreival,
 }) => {
   const [selectedTaskFilter, setSelectedTaskFilter] = useState("open");
@@ -48,7 +50,7 @@ const TableConfig = ({
                 Open Tasks
               </span>
               <p className="mt-1 text-3xl font-semibold dark:text-white">
-                2,345
+                {openTaskCount}
               </p>
             </div>
           </div>
@@ -72,10 +74,10 @@ const TableConfig = ({
                 >
                   <Users size={20} style={{ color: "#000000" }} />
                 </div>
-                Closed Tasks
+                Delayed Tasks
               </span>
               <p className="mt-1 text-3xl font-semibold dark:text-white">
-                2,345
+                {delayedTaskCount}
               </p>
             </div>
           </div>

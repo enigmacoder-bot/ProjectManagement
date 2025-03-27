@@ -16,6 +16,8 @@ let sortClause = {};
 let dateFilter = null;
 let getAllTasks = null;
 let taskStatus = null;
+let openTaskCount = null;
+let closedTaskCount = null;
 
 let page = 1;
 
@@ -42,6 +44,8 @@ const DataSection = ({
   const [tableData, setTableData] = useState([]);
   const [showDate, setShowDate] = useState(false);
   const [pagination, setPagination] = useState({});
+  const [openTaskCount, setOpenTaskCount] = useState(0);
+  const [delayedTaskCount, setDelayedTaskCount] = useState(0);
   let originalTableData = [];
 
   async function getData() {
@@ -65,7 +69,12 @@ const DataSection = ({
       console.log("the data");
       console.log(result);
       const uniqueData = removeDuplicates(result.data.result);
-
+      if (tableName == "tasks") {
+        console.log("the unique data is");
+        console.log(uniqueData);
+        setOpenTaskCount(result.data.openTasksCount);
+        setDelayedTaskCount(result.data.closedTasksCount);
+      }
       console.log("Original data count:", result.data.result.length);
       console.log("Unique data count:", uniqueData.length);
 
@@ -126,6 +135,9 @@ const DataSection = ({
           sort: sortClause,
         });
         console.log(result);
+
+        setOpenTaskCount(result.data.openTasksCount);
+        setDelayedTaskCount(result.data.closedTasksCount);
         setTableData((state) => result.data.result);
         setPagination((state) => result.data.pagination);
       } catch (e) {
@@ -217,6 +229,8 @@ const DataSection = ({
       {showTableConfig && (
         <TableConfig
           updateALLorMyTaskRetreival={updateALLorMyTaskRetreival}
+          openTaskCount={openTaskCount}
+          delayedTaskCount={delayedTaskCount}
           updateOpenorClosedTaskRetreival={updateOpenorClosedTaskRetreival}
         ></TableConfig>
       )}

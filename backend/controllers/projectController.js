@@ -30,19 +30,62 @@ const addProject = async (req, res) => {
   try {
     const { beneficiary_departments, objectives, ...projectData } = data;
 
+    // Rename budget fields for consistency with DB schema
     if (projectData.planned_budget) {
       projectData.project_budget = projectData.planned_budget;
       delete projectData.planned_budget;
     }
-
     if (projectData.approved_budget) {
       projectData.approved_project_budget = projectData.approved_budget;
       delete projectData.approved_budget;
     }
 
+    // Derive portfolio_id and initiative_id from program_id if provided
+    if (projectData.program_id) {
+      const programQuery = await sql`
+        SELECT portfolio_id
+        FROM program
+        WHERE id = ${projectData.program_id}
+      `;
+      if (programQuery.length === 0) {
+        return res.status(400).json({
+          status: "failure",
+          message: `Program with id ${projectData.program_id} not found`,
+          result: null,
+        });
+      }
+      projectData.portfolio_id = programQuery[0].portfolio_id;
+
+      if (projectData.portfolio_id) {
+        const portfolioQuery = await sql`
+          SELECT initiative_id
+          FROM portfolio
+          WHERE id = ${projectData.portfolio_id}
+        `;
+        if (portfolioQuery.length === 0) {
+          return res.status(400).json({
+            status: "failure",
+            message: `Portfolio with id ${projectData.portfolio_id} not found`,
+            result: null,
+          });
+        }
+        projectData.initiative_id = portfolioQuery[0].initiative_id;
+      }
+    }
+
+    // Ensure vendor_id is included (no transformation needed, just verify it's in the data)
+    if (projectData.vendor_id && isNaN(projectData.vendor_id)) {
+      return res.status(400).json({
+        status: "failure",
+        message: "Invalid vendor_id: must be a number",
+        result: null,
+      });
+    }
+
     const columns = Object.keys(projectData);
     const values = Object.values(projectData);
 
+    // Validate column names
     for (const column of columns) {
       if (!/^[a-zA-Z0-9_]+$/.test(column)) {
         return res.status(400).json({
@@ -60,9 +103,11 @@ const addProject = async (req, res) => {
       RETURNING id;
     `;
 
+    console.log("Inserting project with data:", projectData);
     const result = await sql.unsafe(queryText, values);
     const projectId = result[0].id;
 
+    // Insert beneficiary departments
     if (beneficiary_departments && beneficiary_departments.length > 0) {
       console.log(
         "Inserting beneficiary departments:",
@@ -71,14 +116,15 @@ const addProject = async (req, res) => {
       const departmentInsertQueries = beneficiary_departments.map(
         (departmentId) => {
           return sql`
-          INSERT INTO project_department (project_id, department_id)
-          VALUES (${projectId}, ${departmentId});
-        `;
+            INSERT INTO beneficiary_departments (project_id, department_id)
+            VALUES (${projectId}, ${departmentId});
+          `;
         }
       );
       await Promise.all(departmentInsertQueries);
     }
 
+    // Insert objectives
     if (objectives && Array.isArray(objectives) && objectives.length > 0) {
       console.log("Inserting project objectives:", objectives);
       try {
@@ -124,7 +170,6 @@ const addProject = async (req, res) => {
     });
   }
 };
-
 // @Description Update existing project
 // @Route site.com/data-management/updateproject
 const updateProject = async (req, res) => {
@@ -224,14 +269,14 @@ const updateProject = async (req, res) => {
     if (beneficiaryDepartments && Array.isArray(beneficiaryDepartments)) {
       try {
         await sql`
-          DELETE FROM project_department
+          DELETE FROM beneficiary_departments
           WHERE project_id = ${id}
         `;
         if (beneficiaryDepartments.length > 0) {
           const departmentInsertQueries = beneficiaryDepartments.map(
             (departmentId) => {
               return sql`
-              INSERT INTO project_department (project_id, department_id)
+              INSERT INTO beneficiary_departments (project_id, department_id)
               VALUES (${id}, ${departmentId});
             `;
             }
@@ -381,7 +426,7 @@ const getProjectById = async (req, res) => {
     const departmentsQuery = `
       SELECT d.id, d.name, d.arabic_name
       FROM department d
-      JOIN project_department pd ON d.id = pd.department_id
+      JOIN beneficiary_departments pd ON d.id = pd.department_id
       WHERE pd.project_id = $1
     `;
     const objectivesQuery = `
@@ -832,7 +877,7 @@ const addBeneficiaryDepartments = async (req, res) => {
 
       // Step 2: Validate department IDs
       const validDepartments = await sql`
-        SELECT id FROM departments WHERE id = ANY(${departmentIds});
+        SELECT id FROM department WHERE id = ANY(${departmentIds});
       `;
       const validDepartmentIds = validDepartments.map((row) => row.id);
       const invalidIds = departmentIds.filter(
@@ -867,8 +912,6 @@ const addBeneficiaryDepartments = async (req, res) => {
     });
   }
 };
-
-module.exports = { addBeneficiaryDepartments, getBeneficiaryDepartments };
 
 const getBeneficiaryDepartments = async (req, res) => {
   const { projectId } = req.body;

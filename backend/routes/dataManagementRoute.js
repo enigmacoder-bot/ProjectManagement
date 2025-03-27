@@ -32,6 +32,7 @@ const {
   updateProgram,
   deleteProgram,
   getPrograms,
+  getProgramDetails,
 } = require("../controllers/programController");
 
 const {
@@ -50,6 +51,7 @@ const {
   getProjectPhase,
   getProjectTypes,
   addBeneficiaryDepartments,
+  getBeneficiaryDepartments,
 } = require("../controllers/projectController");
 const {
   getSchedulePlan,
@@ -158,9 +160,12 @@ router.post("/getPhaseDurations", getPhaseDurations);
 router.post("/getSchedulePlan", getSchedulePlan);
 
 router.post("/addBeneficiaryDepartments", addBeneficiaryDepartments);
+router.post("/getBeneficiaryDepartments", getBeneficiaryDepartments);
 
 router.post(
   "/createProjectCreationTaskForDeputy",
   createProjectCreationTaskForDeputy
 );
+
+router.post("/getProgramDetails", getProgramDetails);
 module.exports = router;

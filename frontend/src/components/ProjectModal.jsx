@@ -28,7 +28,9 @@ const ProjectModal = ({
   const [vendors, setVendors] = useState([]);
   const [objectives, setObjectives] = useState([]);
   const [localFiles, setLocalFiles] = useState([]);
-
+  const [durationOptions, setDurationOptions] = useState([]);
+  const [phaseDurations, setPhaseDurations] = useState([]);
+  const [selectedProgramDetails, setSelectedProgramDetails] = useState(null); // New state for program details
   const {
     register,
     handleSubmit,
@@ -414,6 +416,45 @@ const ProjectModal = ({
   //   fetchProjectTypes();
   // }, []);
 
+  // Function to fetch program details from the backend
+  const fetchProgramDetails = async (programId) => {
+    if (!programId) {
+      setSelectedProgramDetails(null); // Clear details if no program is selected
+      return;
+    }
+
+    try {
+      const response = await axiosInstance.post(
+        "/data-management/getProgramDetails",
+        { program_id: programId },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data && response.data.status === "success") {
+        setSelectedProgramDetails(response.data.result); // Set the fetched details
+      } else {
+        throw new Error(
+          response.data?.message || "Failed to fetch program details"
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching program details:", error);
+      toast.error("Failed to load program details");
+      setSelectedProgramDetails(null); // Reset on error
+    }
+  };
+
+  // Watch the programName field and fetch details when it changes
+  const selectedProgramId = watch("programName"); // Get the current value of programName
+
+  useEffect(() => {
+    fetchProgramDetails(selectedProgramId); // Fetch details whenever programName changes
+  }, [selectedProgramId]);
+
   useEffect(() => {
     const currentPhase = watch("currentPhase");
     if (currentPhase) {
@@ -641,7 +682,7 @@ const ProjectModal = ({
         project_manager_id: parseInt(data.projectManager) || null,
         alternative_project_manager_id:
           parseInt(data.alternativeProjectManager) || null,
-        vendor_id: parseInt(data.vendorName) || null,
+        vendor_id: parseInt(data.vendor_id) || null,
         beneficiary_departments: selectedDepartmentIds,
         objectives: selectedObjectiveIds,
         project_budget: data.planned_budget
@@ -1045,24 +1086,28 @@ const ProjectModal = ({
           {shouldShowSection("category") && (
             <div className="mb-6">
               <h3 className="font-semibold mb-4">Project Categories</h3>
-              <div className="grid grid-cols-2 gap-6 mb-4">
+              <div className="grid grid-cols-3 gap-6 mb-4">
                 <div>
                   <label className="block text-sm font-semibold mb-1">
-                    Initiative Name
+                    Program Name
                   </label>
                   <div className="relative">
                     <Controller
-                      name="initiativeName"
+                      name="programName"
                       control={control}
                       render={({ field }) => (
                         <select
                           className="w-full p-2 border border-gray-300 rounded appearance-none bg-white"
                           {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            fetchProgramDetails(e.target.value); // Fetch details when program changes
+                          }}
                         >
-                          <option value="">Select Initiative</option>
-                          {initiatives.map((initiative) => (
-                            <option key={initiative.id} value={initiative.id}>
-                              {initiative.name}
+                          <option value="">Select Program</option>
+                          {programs.map((program) => (
+                            <option key={program.id} value={program.id}>
+                              {program.name}
                             </option>
                           ))}
                         </select>
@@ -1077,72 +1122,26 @@ const ProjectModal = ({
                   <label className="block text-sm font-semibold mb-1">
                     Portfolio Name
                   </label>
-                  <div className="relative">
-                    <Controller
-                      name="portfolioName"
-                      control={control}
-                      render={({ field }) => (
-                        <select
-                          className="w-full p-2 border border-gray-300 rounded appearance-none bg-white"
-                          {...field}
-                        >
-                          <option value="">Select Portfolio</option>
-                          {portfolios.map((portfolio) => (
-                            <option key={portfolio.id} value={portfolio.id}>
-                              {portfolio.name}{" "}
-                              {portfolio.portfolio_manager
-                                ? `(${portfolio.first_name} ${portfolio.family_name})`
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    />
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                      <ChevronDown size={16} />
-                    </div>
-                  </div>
+                  <input
+                    type="text"
+                    className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                    value={selectedProgramDetails?.portfolio_name || ""}
+                    readOnly
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">
+                    Initiative Name
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                    value={selectedProgramDetails?.initiative_name || ""}
+                    readOnly
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-6 mb-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-1">
-                    Program Name
-                  </label>
-                  <div className="relative">
-                    <Controller
-                      name="programName"
-                      control={control}
-                      render={({ field }) => (
-                        <select
-                          className="w-full p-2 border border-gray-300 rounded appearance-none bg-white"
-                          {...field}
-                        >
-                          <option value="">Select Program</option>
-                          {programs.map((program) => (
-                            <option key={program.id} value={program.id}>
-                              {program.name}
-                              {program.initiative_id
-                                ? initiatives.find(
-                                    (i) => i.id === program.initiative_id
-                                  )
-                                  ? ` (${
-                                      initiatives.find(
-                                        (i) => i.id === program.initiative_id
-                                      ).name
-                                    })`
-                                  : ` (Initiative ID: ${program.initiative_id})`
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    />
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                      <ChevronDown size={16} />
-                    </div>
-                  </div>
-                </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">
                     Project Category <span className="text-red-500">*</span>
@@ -1246,7 +1245,6 @@ const ProjectModal = ({
                   Beneficiary Department <span className="text-red-500">*</span>
                 </label>
                 <div className="border border-gray-300 rounded p-2">
-                  {/* Beneficiary Departments */}
                   <div className="mb-4">
                     <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
                       Beneficiary Departments
@@ -1319,7 +1317,7 @@ const ProjectModal = ({
                   </label>
                   <div className="relative">
                     <Controller
-                      name="vendorName"
+                      name="vendor_id" // Changed from "vendorName" to "vendor_id"
                       control={control}
                       render={({ field }) => (
                         <select
@@ -1415,25 +1413,17 @@ const ProjectModal = ({
             </div>
           </div>
           {/* Schedule Plan */}
-          {shouldShowSection("schedule") ||
-          shouldShowSection("internalSchedule") ? (
+          {(shouldShowSection("schedule") ||
+            shouldShowSection("internalSchedule")) && (
             <SchedulePlanSection
               budget={watch("planned_budget")}
               onScheduleChange={handleScheduleChange}
               internalScheduleData={internalScheduleData}
               projectType={watch("projectType")}
             />
-          ) : null}
-          {/* Documents Section - Replaced with ProjectDocumentSection component */}
+          )}
+          {/* Documents Section */}
           <div className="mb-6 border-t pt-4">
-            {/* <ProjectDocumentSection
-              formMethods={{ setValue, watch }}
-              documents={documents}
-              setDocuments={setDocuments}
-              localFiles={localFiles}
-              setLocalFiles={setLocalFiles}
-            /> */}
-
             <ProjectDocumentSection
               projectPhase={watch("currentPhase")}
               formMethods={{ setValue, watch }}
@@ -1454,15 +1444,13 @@ const ProjectModal = ({
               >
                 Save as draft
               </button>
-
               <button
-                type="submit"
+                type="button"
                 className="px-4 py-2 bg-green-100 text-green-900 rounded hover:bg-green-200"
                 onClick={handleSaveAndSendForApproval}
               >
                 Save and send for approval
               </button>
-
               <button
                 type="button"
                 className="px-4 py-2 bg-red-100 text-red-900 rounded hover:bg-red-200"
