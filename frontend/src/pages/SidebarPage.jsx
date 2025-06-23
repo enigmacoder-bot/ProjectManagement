@@ -37,7 +37,7 @@ const SIDEBAR_ITEMS = [
     name: "dashboard",
     icon: ChartPie,
     href: "/dashboard",
-    roles: ["USER", "PMO","PM"],
+    roles: ["USER", "PMO","PM","DEPUTY"],
   },
   // {
   //   name: "meetings",

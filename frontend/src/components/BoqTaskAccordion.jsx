@@ -4,6 +4,31 @@ import axiosInstance from "../axiosInstance";
 import { FileText, Download } from "lucide-react";
 import { formatCurrency, formatAmount, parseCurrency, convertToFullAmount, formatAmountForInput, parseInputAmount } from "../utils/currencyUtils";
 
+// Helper function to convert item unit_amount from database format to full amount
+const convertItemUnitAmountToFullAmount = (unitAmount) => {
+  const numericAmount = parseFloat(unitAmount);
+  if (isNaN(numericAmount)) return 0;
+  
+  // If the unit amount is small (typically <= 100), assume it's in millions format
+  // This is a heuristic based on the fact that most project items cost millions
+  if (numericAmount > 0 && numericAmount <= 100) {
+    return numericAmount * 1000000;
+  }
+  return numericAmount;
+};
+
+// Helper function to convert full amount back to database storage format
+const convertFullAmountToItemUnitAmount = (fullAmount) => {
+  const numericAmount = parseFloat(fullAmount);
+  if (isNaN(numericAmount)) return 0;
+  
+  // If the amount is >= 1 million, convert to millions format for storage
+  if (numericAmount >= 1000000) {
+    return numericAmount / 1000000;
+  }
+  return numericAmount;
+};
+
 const BoqTaskAccordion = ({
   parentId = null,
   projectBudget = 0,
@@ -24,17 +49,29 @@ const BoqTaskAccordion = ({
   const { totalExecution, totalOperation, totalProjectCost, isOverBudget } =
     useMemo(() => {
       const exec = items.reduce(
-        (sum, item) =>
-          item.type === "Execution"
-            ? sum + parseInputAmount(item.quantity) * parseInputAmount(item.unit_amount)
-            : sum,
+        (sum, item) => {
+          if (item.type === "Execution") {
+            const quantity = parseInputAmount(item.quantity);
+            const unitAmount = parseInputAmount(item.unit_amount);
+            // Convert from database format to full amount for calculation
+            const fullUnitAmount = convertItemUnitAmountToFullAmount(unitAmount);
+            return sum + quantity * fullUnitAmount;
+          }
+          return sum;
+        },
         0
       );
       const oper = items.reduce(
-        (sum, item) =>
-          item.type === "Operation"
-            ? sum + parseInputAmount(item.quantity) * parseInputAmount(item.unit_amount)
-            : sum,
+        (sum, item) => {
+          if (item.type === "Operation") {
+            const quantity = parseInputAmount(item.quantity);
+            const unitAmount = parseInputAmount(item.unit_amount);
+            // Convert from database format to full amount for calculation
+            const fullUnitAmount = convertItemUnitAmountToFullAmount(unitAmount);
+            return sum + quantity * fullUnitAmount;
+          }
+          return sum;
+        },
         0
       );
       const total = exec + oper;
@@ -55,7 +92,7 @@ const BoqTaskAccordion = ({
         data.result?.map((item) => ({
           ...item,
           id: item.id.toString(),
-          total: formatAmount(parseInputAmount(item.quantity) * parseInputAmount(item.unit_amount)),
+          total: formatAmount(parseInputAmount(item.quantity) * convertItemUnitAmountToFullAmount(parseInputAmount(item.unit_amount))),
           quantity: formatAmountForInput(item.quantity),
           unit_amount: formatAmountForInput(item.unit_amount),
         })) || []
@@ -159,7 +196,9 @@ const BoqTaskAccordion = ({
           if (field === "quantity" || field === "unit_amount") {
             const quantity = parseInputAmount(field === "quantity" ? updatedValue : item.quantity || 0);
             const unitAmount = parseInputAmount(field === "unit_amount" ? updatedValue : item.unit_amount || 0);
-            updatedItem.total = formatAmount(quantity * unitAmount);
+            // Convert from database format to full amount for calculation
+            const fullUnitAmount = convertItemUnitAmountToFullAmount(unitAmount);
+            updatedItem.total = formatAmount(quantity * fullUnitAmount);
           }
           
           return updatedItem;
@@ -215,20 +254,28 @@ const BoqTaskAccordion = ({
         item.id.toString().startsWith("temp-")
       );
       newItems = newItems.map((e) => {
+        const unitAmount = parseInputAmount(e.unit_amount);
+        // Convert back to database storage format
+        const dbUnitAmount = convertFullAmountToItemUnitAmount(unitAmount);
         return { 
           ...e, 
           project_id: Number(parentId),
           quantity: parseInputAmount(e.quantity),
-          unit_amount: parseInputAmount(e.unit_amount)
+          unit_amount: dbUnitAmount
         };
       });
       const updates = items.filter(
         (item) => !item.id.toString().startsWith("temp-")
-      ).map((item) => ({
-        ...item,
-        quantity: parseInputAmount(item.quantity),
-        unit_amount: parseInputAmount(item.unit_amount)
-      }));
+      ).map((item) => {
+        const unitAmount = parseInputAmount(item.unit_amount);
+        // Convert back to database storage format
+        const dbUnitAmount = convertFullAmountToItemUnitAmount(unitAmount);
+        return {
+          ...item,
+          quantity: parseInputAmount(item.quantity),
+          unit_amount: dbUnitAmount
+        };
+      });
 
       const payload = {
         newItems: newItems.map(({ id, total, ...rest }) => rest),

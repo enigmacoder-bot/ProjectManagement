@@ -19,7 +19,7 @@ const TopHeader = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isAppsOpen, setIsAppsOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const { email, role, setMeetingId } = useAuthStore();
+  const { email, role, setMeetingId, setIsMeetingPage } = useAuthStore();
 
   const profileRef = useRef(null);
   const appsRef = useRef(null);
@@ -82,6 +82,7 @@ const TopHeader = () => {
   const handleLogout = () => {
     localStorage.clear();
     setIsProfileOpen(false);
+    setIsMeetingPage(false); // Reset meeting page flag on logout
     navigate("/");
   };
 
@@ -96,6 +97,7 @@ const TopHeader = () => {
     if(response.status == '201')
     {
       setMeetingId(response.data.result[0].id);
+      setIsMeetingPage(true); // Set meeting page flag to true
       navigate("/meetings");
       closeAppsMenu();
     }

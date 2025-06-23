@@ -8,22 +8,62 @@ const DeliveryCompletionModal = ({ onClose, deliverable, projectId, onSuccessful
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
 
   const handleFileChange = (event) => {
-    setSelectedFile(event.target.files[0]);
+    const file = event.target.files[0];
+    setSelectedFile(file);
     setUploadError('');
+    setValidationErrors(prev => ({ ...prev, file: '' }));
+
+    // Validate file type and size
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf', 
+                           'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                           'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+      
+      if (!allowedTypes.includes(file.type)) {
+        setValidationErrors(prev => ({ 
+          ...prev, 
+          file: 'File type not allowed. Please upload JPG, PNG, PDF, DOC, DOCX, XLS, or XLSX files.' 
+        }));
+        return;
+      }
+
+      // Check file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (file.size > maxSize) {
+        setValidationErrors(prev => ({ 
+          ...prev, 
+          file: 'File size too large. Please upload a file smaller than 10MB.' 
+        }));
+        return;
+      }
+    }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    
+    // Clear previous errors
+    setUploadError('');
+    setValidationErrors({});
+
+    // Validate file
     if (!selectedFile) {
-      setUploadError('Please select a delivery note document to upload.');
+      setValidationErrors({ file: 'Please select a delivery note document to upload.' });
       return;
     }
     if (!deliverable.id) {
       setUploadError('Missing deliverable ID.');
       return;
     }
+
+    // Check if there are any validation errors
+    if (Object.values(validationErrors).some(error => error !== '')) {
+      return;
+    }
+
     setUploading(true);
     setUploadError('');
     const formData = new FormData();
@@ -75,11 +115,26 @@ const DeliveryCompletionModal = ({ onClose, deliverable, projectId, onSuccessful
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Upload signed delivery note</label>
-            <input type="file" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+            <input 
+              type="file" 
+              onChange={handleFileChange} 
+              className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx"
+            />
             {selectedFile && <p className="text-sm text-gray-600 mt-1">Selected: {selectedFile.name}</p>}
+            {validationErrors.file && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.file}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Allowed formats: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (max 10MB)
+            </p>
           </div>
           {uploadError && <p className="text-red-500 text-sm">{uploadError}</p>}
-          <button type="submit" disabled={uploading} className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400">
+          <button 
+            type="submit" 
+            disabled={uploading || Object.values(validationErrors).some(error => error !== '')} 
+            className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400"
+          >
             {uploading ? 'Submitting...' : 'Submit'}
           </button>
         </div>
@@ -95,26 +150,129 @@ const DeliveryInvoiceModal = ({ onClose, deliverable, onSuccessfulSubmit, projec
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [paymentPercentage, setPaymentPercentage] = useState(deliverable.payment_percentage || 0); // Or derive from remaining value
+  const [validationErrors, setValidationErrors] = useState({});
+  const initialPaymentPercentage = deliverable.payment_percentage || 0;
 
   const handleFileChange = (event) => {
-    setSelectedFile(event.target.files[0]);
+    const file = event.target.files[0];
+    setSelectedFile(file);
     setUploadError('');
+    setValidationErrors(prev => ({ ...prev, file: '' }));
+
+    // Validate file type and size for invoice documents
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf', 
+                           'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                           'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+      
+      if (!allowedTypes.includes(file.type)) {
+        setValidationErrors(prev => ({ 
+          ...prev, 
+          file: 'File type not allowed. Please upload JPG, PNG, PDF, DOC, DOCX, XLS, or XLSX files.' 
+        }));
+        return;
+      }
+
+      // Check file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (file.size > maxSize) {
+        setValidationErrors(prev => ({ 
+          ...prev, 
+          file: 'File size too large. Please upload a file smaller than 10MB.' 
+        }));
+        return;
+      }
+    }
+  };
+
+  // Validation function for invoice amount
+  const validateInvoiceAmount = (amount) => {
+    const errors = {};
+    const numericAmount = parseFloat(amount);
+    const remainingValue = (deliverable.budget || 0) - (deliverable.invoiced || 0);
+
+    if (!amount || amount === '') {
+      errors.invoiceAmount = 'Invoice amount is required';
+    } else if (isNaN(numericAmount)) {
+      errors.invoiceAmount = 'Please enter a valid number';
+    } else if (numericAmount <= 0) {
+      errors.invoiceAmount = 'Invoice amount must be greater than 0';
+    } else if (numericAmount > remainingValue) {
+      errors.invoiceAmount = `Invoice amount cannot exceed remaining value (${formatCurrency(remainingValue, 'SAR', false)})`;
+    }
+
+    return errors;
+  };
+
+  // Validation function for payment percentage
+  const validatePaymentPercentage = (percentage) => {
+    const errors = {};
+    const numericPercentage = parseFloat(percentage);
+
+    if (isNaN(numericPercentage)) {
+      errors.paymentPercentage = 'Please enter a valid percentage';
+    } else if (numericPercentage < 0) {
+      errors.paymentPercentage = 'Payment percentage cannot be negative';
+    } else if (numericPercentage > 100) {
+      errors.paymentPercentage = 'Payment percentage cannot exceed 100%';
+    } else if (numericPercentage < initialPaymentPercentage) {
+      errors.paymentPercentage = `Payment percentage cannot be reduced below ${initialPaymentPercentage}%`;
+    }
+
+    return errors;
+  };
+
+  // Enhanced invoice amount change handler
+  const handleInvoiceAmountChange = (e) => {
+    const value = parseInputAmount(e.target.value);
+    setInvoiceAmount(value);
+    
+    const errors = validateInvoiceAmount(value);
+    setValidationErrors(prev => ({ ...prev, invoiceAmount: errors.invoiceAmount || '' }));
+  };
+
+  // Enhanced payment percentage change handler
+  const handlePaymentPercentageChange = (e) => {
+    const value = e.target.value;
+    const numericValue = Math.max(initialPaymentPercentage, Math.min(100, Number(value) || initialPaymentPercentage));
+    
+    setPaymentPercentage(numericValue);
+    
+    const errors = validatePaymentPercentage(numericValue);
+    setValidationErrors(prev => ({ ...prev, paymentPercentage: errors.paymentPercentage || '' }));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    
+    // Clear previous errors
+    setUploadError('');
+    setValidationErrors({});
+
+    // Validate all fields
+    const invoiceErrors = !isFullAmount ? validateInvoiceAmount(invoiceAmount) : {};
+    const paymentErrors = validatePaymentPercentage(paymentPercentage);
+    
+    const allErrors = { ...invoiceErrors, ...paymentErrors };
+
     if (!selectedFile) {
-      setUploadError('Please select an invoice document to upload.');
-      return;
+      allErrors.file = 'Please select an invoice document to upload.';
     }
     if (!deliverable.id) {
-      setUploadError('Missing deliverable ID.');
-      return;
+      allErrors.general = 'Missing deliverable ID.';
     }
     if (!invoiceAmount && !isFullAmount) {
-      setUploadError('Please enter an invoice amount or check Full Amount.');
+      allErrors.invoiceAmount = 'Please enter an invoice amount or check Full Amount.';
+    }
+
+    if (Object.keys(allErrors).length > 0) {
+      setValidationErrors(allErrors);
+      if (allErrors.general) {
+        setUploadError(allErrors.general);
+      }
       return;
     }
+
     setUploading(true);
     setUploadError('');
     // Hardcode finalInvoiceAmount for testing
@@ -156,12 +314,22 @@ const DeliveryInvoiceModal = ({ onClose, deliverable, onSuccessfulSubmit, projec
 
   const handleFullAmountChange = (e) => {
     setIsFullAmount(e.target.checked);
+    setValidationErrors(prev => ({ ...prev, invoiceAmount: '' }));
+    
     if (e.target.checked) {
+      if (remainingValue <= 0) {
+        setValidationErrors(prev => ({ 
+          ...prev, 
+          invoiceAmount: 'No remaining value available for invoicing' 
+        }));
+        return;
+      }
       setInvoiceAmount(remainingValue.toString()); // Set invoice amount to remaining
       setPaymentPercentage(100); // If full amount, payment percentage becomes 100
     } else {
       // Optionally clear or revert invoiceAmount if unchecked
-      // setInvoiceAmount(''); 
+      setInvoiceAmount(''); 
+      setPaymentPercentage(initialPaymentPercentage);
     }
   };
 
@@ -190,11 +358,16 @@ const DeliveryInvoiceModal = ({ onClose, deliverable, onSuccessfulSubmit, projec
               id="invoiceAmount"
               type="text" 
               value={formatAmountForInput(invoiceAmount)} 
-              onChange={(e) => setInvoiceAmount(parseInputAmount(e.target.value))}
+              onChange={handleInvoiceAmountChange}
               disabled={isFullAmount}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2" 
+              className={`mt-1 block w-full border rounded-md p-2 ${
+                validationErrors.invoiceAmount ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter invoice amount (e.g., 100,000)"
             />
+            {validationErrors.invoiceAmount && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.invoiceAmount}</p>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             <input 
@@ -207,17 +380,27 @@ const DeliveryInvoiceModal = ({ onClose, deliverable, onSuccessfulSubmit, projec
             <label htmlFor="fullAmount" className="text-sm font-medium text-gray-700">Invoice Full Remaining Amount</label>
           </div>
           <div>
-            <label htmlFor="paymentPercentage" className="block text-sm font-medium text-gray-700">Payment Percentage (%)</label>
+            <label htmlFor="paymentPercentage" className="block text-sm font-medium text-gray-700">
+              Payment Percentage (%) 
+              {initialPaymentPercentage > 0 && (
+                <span className="text-gray-500 text-xs ml-1">(minimum: {initialPaymentPercentage}%)</span>
+              )}
+            </label>
             <input
               id="paymentPercentage"
               type="number"
               value={paymentPercentage}
-              onChange={(e) => setPaymentPercentage(Math.max(0, Math.min(100, Number(e.target.value))))}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              onChange={handlePaymentPercentageChange}
+              className={`mt-1 block w-full border rounded-md p-2 ${
+                validationErrors.paymentPercentage ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter payment percentage"
               max="100"
-              min="0"
+              min={initialPaymentPercentage}
             />
+            {validationErrors.paymentPercentage && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.paymentPercentage}</p>
+            )}
           </div>
           <div>
             <label htmlFor="invoiceFile" className="block text-sm font-medium text-gray-700">Upload Invoice Document</label>
@@ -226,13 +409,20 @@ const DeliveryInvoiceModal = ({ onClose, deliverable, onSuccessfulSubmit, projec
               type="file" 
               onChange={handleFileChange} 
               className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx"
             />
             {selectedFile && <p className="text-sm text-gray-600 mt-1">Selected: {selectedFile.name}</p>}
+            {validationErrors.file && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.file}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Allowed formats: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (max 10MB)
+            </p>
           </div>
           {uploadError && <p className="text-red-500 text-sm">{uploadError}</p>}
           <button 
             type="submit" 
-            disabled={uploading}
+            disabled={uploading || Object.values(validationErrors).some(error => error !== '')}
             className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400"
           >
             {uploading ? 'Submitting...' : 'Submit Invoice'}
@@ -247,16 +437,55 @@ const DeliverableDetailsModal = ({ onClose, deliverable, projectId }) => {
   const [scopeEvidenceFile, setScopeEvidenceFile] = useState(null);
   const [uploadingScope, setUploadingScope] = useState(false);
   const [uploadErrorScope, setUploadErrorScope] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
 
   const handleScopeFileChange = (event) => {
-    setScopeEvidenceFile(event.target.files[0]);
+    const file = event.target.files[0];
+    setScopeEvidenceFile(file);
     setUploadErrorScope('');
+    setValidationErrors(prev => ({ ...prev, file: '' }));
+
+    // Validate file type and size
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf', 
+                           'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                           'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+      
+      if (!allowedTypes.includes(file.type)) {
+        setValidationErrors(prev => ({ 
+          ...prev, 
+          file: 'File type not allowed. Please upload JPG, PNG, PDF, DOC, DOCX, XLS, or XLSX files.' 
+        }));
+        return;
+      }
+
+      // Check file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (file.size > maxSize) {
+        setValidationErrors(prev => ({ 
+          ...prev, 
+          file: 'File size too large. Please upload a file smaller than 10MB.' 
+        }));
+        return;
+      }
+    }
   };
 
   const handleScopeSubmit = async (event) => {
     event.preventDefault();
+    
+    // Clear previous errors
+    setUploadErrorScope('');
+    setValidationErrors({});
+
+    // Validate file
     if (!scopeEvidenceFile) {
-      setUploadErrorScope('Please select a scope evidence document to upload.');
+      setValidationErrors({ file: 'Please select a scope evidence document to upload.' });
+      return;
+    }
+
+    // Check if there are any validation errors
+    if (Object.values(validationErrors).some(error => error !== '')) {
       return;
     }
 
@@ -312,13 +541,20 @@ const DeliverableDetailsModal = ({ onClose, deliverable, projectId }) => {
               type="file" 
               onChange={handleScopeFileChange} 
               className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx"
             />
             {scopeEvidenceFile && <p className="text-sm text-gray-600 mt-1">Selected: {scopeEvidenceFile.name}</p>}
+            {validationErrors.file && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.file}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Allowed formats: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (max 10MB)
+            </p>
           </div>
           {uploadErrorScope && <p className="text-red-500 text-sm">{uploadErrorScope}</p>}
           <button 
             type="submit" 
-            disabled={uploadingScope}
+            disabled={uploadingScope || Object.values(validationErrors).some(error => error !== '')}
             className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400"
           >
             {uploadingScope ? 'Uploading...' : 'Upload Document'}

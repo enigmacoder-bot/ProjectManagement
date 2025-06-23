@@ -5,6 +5,7 @@ import TableData from "../components/TableData";
 import axiosInstance from "../axiosInstance";
 import UpdateDynamicForm from "./UpdateDynamicForm";
 import Pagination from "./Pagination";
+import useAuthStore from "../store/authStore";
 
 const sampleRisks = [
   {
@@ -244,6 +245,7 @@ const RisksAndIssuesTable = ({ risks, onEdit, onAdd, isLoading, projectName, del
   const [tableData, setTableData] = useState(sampleRisks); // Should probably use the `risks` prop or fetch
   const [projectPhases, setProjectPhases] = useState([]); // If phases need to be managed internally
   const [pagination , setPagination] = useState([]);
+  const { isMeetingPage } = useAuthStore();
   let page = 1 ;
   let limit = 5;
   let sortType = "due_date";
@@ -358,14 +360,16 @@ const RisksAndIssuesTable = ({ risks, onEdit, onAdd, isLoading, projectName, del
 
   return (
     <div>
-      <div className="mb-4 flex justify-end">
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm font-medium"
-        >
-          + Add Risk
-        </button>
-      </div>
+      {!isMeetingPage && (
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm font-medium"
+          >
+            + Add Risk
+          </button>
+        </div>
+      )}
 
       <TableData
         getData={null} // or your fetch function
@@ -373,6 +377,7 @@ const RisksAndIssuesTable = ({ risks, onEdit, onAdd, isLoading, projectName, del
         tableName="risks"
         setTableData={setTableData}
         showDate={false}
+        showActionButtons={!isMeetingPage}
         sortTableData={sortTableData}
         columnSetting={columnSetting}
         onEdit={handleEdit}

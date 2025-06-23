@@ -31,6 +31,13 @@ export default function ProjectMeetingSidebar({
   isSidebarOpen,
   categories,
 }) {
+  const iconMap = {
+  Star,
+  GitBranch,
+  Briefcase,
+  Code,
+  Building
+};
   return (
     <div
       className={`h-screen bg-white border-r border-gray-200 transition-all duration-300 ${
@@ -39,11 +46,11 @@ export default function ProjectMeetingSidebar({
     >
       <div className="p-4">
         <div className="text-sm font-medium text-gray-500 px-2 py-2 mb-4">
-          Weekly Meeting No 45
+          Weekly Meeting
         </div>
         <nav className="space-y-1">
           {categories.map((category) => {
-            const Icon = category.icon;
+            const Icon = iconMap[category.icon];
             const isActive = activeSideBarFilter === category.name;
             return (
               <button
@@ -56,6 +63,7 @@ export default function ProjectMeetingSidebar({
                 }`}
               >
                 <Icon className="h-4 w-4 mr-3" />
+                {/* {category.icon} */}
                 <span>{formatFilterName(category.name)}</span>
               </button>
             );

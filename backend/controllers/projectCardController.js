@@ -32,13 +32,123 @@ const getProjectDetails = async (req, res) => {
       LEFT JOIN 
         project_phase pp ON pp.id = p.current_phase_id
       WHERE 
-        p.id = ${projectid};
+        p.id = ${projectid};    `;
+
+    const deliverableResult = await sql`
+      SELECT 
+        dd.*
+      FROM deliverables_dashboard dd
+      WHERE dd.project_id = ${projectid};
+    `;    // Get aggregated invoice data for project totals
+    const paymentSummary = await sql`
+      SELECT 
+        SUM(COALESCE(dph.invoice_amount, 0)) AS total_invoiced,
+        SUM(CASE WHEN dph.status = 'DELAYED' THEN COALESCE(dph.invoice_amount, 0) ELSE 0 END) AS delayed_invoices_amount
+      FROM project p
+      JOIN item i ON i.project_id = p.id
+      JOIN deliverable d ON d.item_id = i.id
+      LEFT JOIN deliverable_payment_history dph ON dph.deliverable_id = d.id
+      WHERE p.id = ${projectid} AND dph.invoice_amount IS NOT NULL;
     `;
 
+    let total = 0, completed = 0, delayed = 0, partialDelayed = 0 , notStarted = 0 , onPlan = 0;
+    let totalPlannedInvoices = 0, totalInvoiced = 0, totalDelayedInvoices = 0;
+    let totalProgress = 0, totalExpectedProgress = 0, validProgressCount = 0;
+    const today = new Date();
+    
+    // Calculate deliverable statistics using the dashboard view
+    for (const row of deliverableResult) {
+      total++;
+      console.log(row);
+      const { dashboard_status, scope_pct, contract_amount } = row;
+      
+      // Add to planned invoices total (all deliverables amounts)
+      totalPlannedInvoices += parseFloat(contract_amount || 0);
+      
+      // Count by status from the dashboard view
+      switch (dashboard_status) {
+        case 'COMPLETED':
+          completed++;
+          totalProgress += 100;
+          totalExpectedProgress += 100;
+          validProgressCount++;
+          break;
+        case 'DELAYED':
+          delayed++;
+          totalProgress += parseFloat(scope_pct || 0);
+          // For delayed items, expected progress should be 100%
+          totalExpectedProgress += 100;
+          validProgressCount++;
+          break;
+        case 'NOT_STARTED':
+          notStarted++;
+          break;
+        default:
+          // IN_PROGRESS or other statuses
+          const currentProgress = parseFloat(scope_pct || 0);
+          totalProgress += currentProgress;
+          
+          // Calculate expected progress based on time elapsed
+          const start = new Date(row.start_date);
+          const end = new Date(row.end_date);
+          const totalDays = (end - start) / (1000 * 60 * 60 * 24) + 1;
+          const elapsedDays = (today - start) / (1000 * 60 * 60 * 24) + 1;
+          const expected = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100));
+          
+          totalExpectedProgress += expected;
+          validProgressCount++;
+          
+          // Determine if on plan or partially delayed
+          if (currentProgress >= expected) {
+            onPlan++;
+          } else if (currentProgress > 0) {
+            partialDelayed++;
+          }
+          break;
+      }
+    }    // Calculate payment statistics
+    if (paymentSummary.length > 0) {
+      const payment = paymentSummary[0];
+      totalInvoiced = parseFloat(payment.total_invoiced || 0);
+      totalDelayedInvoices = parseFloat(payment.delayed_invoices_amount || 0);
+    }// Calculate percentages
+    const plannedInvoicesPercentage = totalPlannedInvoices > 0 ? 
+      Math.round((totalInvoiced / totalPlannedInvoices) * 100) : 0;
+    const delayedInvoicesPercentage = totalInvoiced > 0 ? 
+      Math.round((totalDelayedInvoices / totalInvoiced) * 100) : 0;
+
+    // Calculate schedule performance metrics
+    const actualCompletion = validProgressCount > 0 ? 
+      Math.round(totalProgress / validProgressCount) : 0;
+    const plannedCompletion = validProgressCount > 0 ? 
+      Math.round(totalExpectedProgress / validProgressCount) : 0;
+    const schedulePerformanceIndex = plannedCompletion > 0 ? 
+      (actualCompletion / plannedCompletion).toFixed(2) : "0.00";
+    const scheduleVariance = actualCompletion - plannedCompletion;
+
+    const finalResponse = { 
+      ...result[0], 
+      total, 
+      notStarted, 
+      completed, 
+      partialDelayed, 
+      onPlan, 
+      delayed,
+      plannedInvoices: totalPlannedInvoices,
+      plannedInvoicesPercentage: plannedInvoicesPercentage,
+      totalInvoiced: totalInvoiced,
+      delayedInvoices: totalDelayedInvoices,
+      delayedInvoicesPercentage: delayedInvoicesPercentage,
+      actualCompletion: actualCompletion,
+      plannedCompletion: plannedCompletion,
+      schedulePerformanceIndex: schedulePerformanceIndex,
+      scheduleVariance: scheduleVariance
+    };
+    
     res.status(200).json({
       status: "success",
       message: "Successfully retrieved project details with linked hierarchy",
-      result,
+      result:finalResponse
     });
   } catch (e) {
     console.error("Error fetching project details:", e);
@@ -55,15 +165,31 @@ const getProjectDetails = async (req, res) => {
 
 const getProjectsBasedOnUserId = async(req,res)=>{
   const {userId} = req.params;
+  const {role } = req.query;
   try{
-    const result = await sql `
-      SELECT
-        *
-      FROM
-        project
-      WHERE 
-        project_manager_id = ${userId}
-    `
+    let result = [];
+    if(role == 'DEPUTY' || role== 'PMO')
+    {
+      result = await sql `
+        SELECT
+          *
+        FROM
+          project
+      `
+    }
+    else
+    {
+      result = await sql `
+        SELECT
+          *
+        FROM
+          project
+        WHERE 
+          project_manager_id = ${userId} 
+        OR 
+          alternative_project_manager_id = ${userId}
+      `
+    }
     res.status(200).json({
       status:"success",
       message:"Successfully retrieved projects for user",

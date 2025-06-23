@@ -181,9 +181,11 @@ const TableData = ({
         if(response.status == 200)
         {
           console.log("status is 200");
+          console.log(updatedData);
+          console.log(tableData);
           setTableData((prevData) =>
             prevData.map((item) =>
-              item.id === id ? { ...item, name :updatedData.caseName , comments:updatedData.responsePlan } : item
+              item.id === id ? { ...item, name :updatedData.caseName , comments:updatedData.responsePlan , status:updatedData.status ,  } : item
             )
           );
           toast.success("Record updated successfully");

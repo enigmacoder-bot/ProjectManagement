@@ -984,6 +984,86 @@ const getDeliverableProgressHistory = async (req, res) => {
   }
 };
 
+// Get deliverable statistics for project tiles
+const getDeliverableStatistics = async (req, res) => {
+  const { projectId } = req.params;
+
+  if (!projectId) {
+    return res.status(400).json({ message: "Project ID is required" });
+  }
+
+  try {
+    const statistics = await sql`
+      WITH deliverable_stats AS (
+        SELECT 
+          d.id,
+          d.name,
+          d.start_date,
+          d.end_date,
+          d.amount,
+          COALESCE(dp.status, 'NOT_STARTED') as status,
+          COALESCE(dp.progress_percentage, 0) as progress_percentage,
+          COALESCE(SUM(dph.invoice_amount), 0) as invoiced_amount,
+          CASE 
+            WHEN CURRENT_DATE > d.end_date AND COALESCE(dp.status, 'NOT_STARTED') != 'COMPLETED' THEN 'DELAYED'
+            WHEN CURRENT_DATE > d.start_date AND CURRENT_DATE <= d.end_date AND COALESCE(dp.progress_percentage, 0) < 
+                 (EXTRACT(EPOCH FROM (CURRENT_DATE - d.start_date)) / 
+                  EXTRACT(EPOCH FROM (d.end_date - d.start_date))) * 100 THEN 'PARTIALLY_DELAYED'
+            WHEN CURRENT_DATE <= d.end_date AND COALESCE(dp.status, 'NOT_STARTED') IN ('IN_PROGRESS', 'PENDING_REVIEW') THEN 'ON_PLAN'
+            ELSE COALESCE(dp.status, 'NOT_STARTED')
+          END as delivery_status
+        FROM deliverable d
+        JOIN item i ON d.item_id = i.id
+        LEFT JOIN deliverable_progress dp ON d.id = dp.deliverable_id
+        LEFT JOIN deliverable_payment_history dph ON d.id = dph.deliverable_id
+        WHERE i.project_id = ${projectId}
+        GROUP BY d.id, d.name, d.start_date, d.end_date, d.amount, dp.status, dp.progress_percentage
+      )
+      SELECT 
+        COUNT(*) as total_deliverables,
+        COUNT(CASE WHEN delivery_status = 'PARTIALLY_DELAYED' THEN 1 END) as partially_delayed,
+        COUNT(CASE WHEN delivery_status = 'DELAYED' THEN 1 END) as delayed,
+        COUNT(CASE WHEN delivery_status = 'ON_PLAN' THEN 1 END) as on_plan,
+        COUNT(CASE WHEN status = 'NOT_STARTED' THEN 1 END) as not_started,
+        COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed,
+        SUM(COALESCE(amount, 0)) as total_budget,
+        SUM(invoiced_amount) as total_invoiced,
+        SUM(CASE WHEN delivery_status = 'DELAYED' THEN invoiced_amount ELSE 0 END) as delayed_invoices
+      FROM deliverable_stats
+    `;
+
+    const stats = statistics[0] || {
+      total_deliverables: 0,
+      partially_delayed: 0,
+      delayed: 0,
+      on_plan: 0,
+      not_started: 0,
+      completed: 0,
+      total_budget: 0,
+      total_invoiced: 0,
+      delayed_invoices: 0
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        deliverables: stats.total_deliverables.toString(),
+        partiallyDelayed: stats.partially_delayed.toString(),
+        delayed: stats.delayed.toString(),
+        onPlan: stats.on_plan.toString(),
+        notStarted: stats.not_started.toString(),
+        completed: stats.completed.toString(),
+        totalBudget: stats.total_budget,
+        totalInvoiced: stats.total_invoiced,
+        delayedInvoices: stats.delayed_invoices
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching deliverable statistics:", error);
+    res.status(500).json({ message: "Error fetching deliverable statistics", error: error.message });
+  }
+};
+
 module.exports = {
   getItemsWithDeliverables,
   saveDeliverablesItems,
@@ -1001,5 +1081,6 @@ module.exports = {
   getDeliverableDocuments,
   updatePaymentHistoryStatus,
   getDocumentDownloadUrlEndpoint,
+  getDeliverableStatistics, // Add the new function
   // ...other exports
 };

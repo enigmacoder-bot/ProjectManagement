@@ -72,7 +72,7 @@ export const router = createBrowserRouter([
       {
         path: "/dashboard",
         element: (
-          <ProtectedRoute allowedRoles={["USER", "PMO","PM"]}>
+          <ProtectedRoute allowedRoles={["USER", "PMO","PM","DEPUTY"]}>
             <DashboardContainerPage />
           </ProtectedRoute>
         ),
@@ -80,7 +80,7 @@ export const router = createBrowserRouter([
       {
         path: "/meetings",
         element: (
-          <ProtectedRoute allowedRoles={["USER", "PMO"]}>
+          <ProtectedRoute allowedRoles={["USER", "PMO","DEPUTY"]}>
             <MeetingsPage />
           </ProtectedRoute>
         ),

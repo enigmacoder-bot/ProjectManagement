@@ -3,6 +3,64 @@ import { Disclosure, Transition } from "@headlessui/react";
 import axiosInstance from "../axiosInstance";
 import { toast } from "sonner";
 import { formatCurrency, formatAmount, parseCurrency, convertToFullAmount, formatAmountForInput, parseInputAmount } from "../utils/currencyUtils";
+
+// Helper function to convert deliverable amount from database format to full amount
+const convertDeliverableAmountToFullAmount = (amount) => {
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount)) return 0;
+  
+  // If the amount is small (typically <= 100), assume it's in millions format
+  if (numericAmount > 0 && numericAmount <= 100) {
+    return numericAmount * 1000000;
+  }
+  return numericAmount;
+};
+
+// Helper function to convert full amount back to database storage format for deliverables
+const convertFullAmountToDeliverableAmount = (fullAmount) => {
+  const numericAmount = parseFloat(fullAmount);
+  if (isNaN(numericAmount)) return 0;
+  
+  // If the amount is >= 1 million, convert to millions format for storage
+  if (numericAmount >= 1000000) {
+    return numericAmount / 1000000;
+  }
+  return numericAmount;
+};
+
+// Helper function to convert item unit_amount from database format to full amount
+const convertItemUnitAmountToFullAmount = (unitAmount) => {
+  const numericAmount = parseFloat(unitAmount);
+  if (isNaN(numericAmount)) return 0;
+  
+  // If the unit amount is small (typically <= 100), assume it's in millions format
+  if (numericAmount > 0 && numericAmount <= 100) {
+    return numericAmount * 1000000;
+  }
+  return numericAmount;
+};
+
+// Helper function to format duration properly
+const formatDuration = (duration) => {
+  if (!duration) return "0 months";
+  
+  const numericDuration = parseFloat(duration);
+  if (isNaN(numericDuration)) return "0 months";
+  
+  // If duration is less than 1 month, show in days
+  if (numericDuration < 1) {
+    const days = Math.round(numericDuration * 30.44); // Average days per month
+    return `${days} days`;
+  }
+  
+  // Show in months with 1 decimal place if needed
+  if (numericDuration % 1 === 0) {
+    return `${Math.round(numericDuration)} months`;
+  } else {
+    return `${numericDuration.toFixed(1)} months`;
+  }
+};
+
 const PORT = import.meta.env.VITE_PORT;
 
 const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
@@ -50,13 +108,17 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
         console.log("items with deliverables");
         console.log(response);
         
-        // Format the deliverable amounts for display
+        // Format the deliverable amounts for display and convert from database format
         const formattedItems = response.data.map(item => ({
           ...item,
+          // Convert item unit_amount from database format to full amount for display
+          unit_amount: convertItemUnitAmountToFullAmount(item.unit_amount),
+          // Calculate total using converted unit_amount
+          total: parseFloat(item.quantity || 0) * convertItemUnitAmountToFullAmount(item.unit_amount),
           deliverables: item.deliverables ? item.deliverables.map(deliverable => ({
             ...deliverable,
-            // Keep original amount for calculations, add formatted version for display
-            amount: deliverable.amount || 0,
+            // Convert deliverable amount from database format to full amount for calculations
+            amount: convertDeliverableAmountToFullAmount(deliverable.amount || 0),
           })) : []
         }));
         
@@ -119,6 +181,33 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
     }
 
     return (totalDays / 30).toFixed(1); // Convert to months (approx)
+  };
+
+  // Better function to format project duration
+  const formatProjectDuration = (duration) => {
+    if (!duration) return "0";
+
+    const durationStr = duration.toLowerCase(); // Normalize input
+    let totalDays = 0;
+
+    if (durationStr.includes("day")) {
+      totalDays = parseInt(durationStr); // Extract number of days
+    } else if (durationStr.includes("week")) {
+      totalDays = parseInt(durationStr) * 7; // Convert weeks to days
+    }
+
+    // If less than 30 days, show in days
+    if (totalDays < 30) {
+      return `${totalDays} days`;
+    }
+    
+    // If more than 30 days, show in months with appropriate format
+    const months = totalDays / 30;
+    if (months % 1 === 0) {
+      return `${Math.round(months)} months`;
+    } else {
+      return `${months.toFixed(1)} months`;
+    }
   };
 
   const handleDeliverableChange = (
@@ -283,7 +372,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
             .map(
               ({ name, amount, start_date, end_date, duration, item_id }) => ({
                 name,
-                amount: typeof amount === 'string' ? parseInputAmount(amount) : amount || 0,
+                amount: convertFullAmountToDeliverableAmount(typeof amount === 'string' ? parseInputAmount(amount) : amount || 0),
                 start_date,
                 end_date,
                 duration,
@@ -297,7 +386,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
             .map(({ id, name, amount, start_date, end_date, duration }) => ({
               id,
               name,
-              amount: typeof amount === 'string' ? parseInputAmount(amount) : amount || 0,
+              amount: convertFullAmountToDeliverableAmount(typeof amount === 'string' ? parseInputAmount(amount) : amount || 0),
               start_date,
               end_date,
               duration,
@@ -336,7 +425,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
             .map(
               ({ name, amount, start_date, end_date, duration, item_id }) => ({
                 name,
-                amount: typeof amount === 'string' ? parseInputAmount(amount) : amount || 0,
+                amount: convertFullAmountToDeliverableAmount(typeof amount === 'string' ? parseInputAmount(amount) : amount || 0),
                 start_date,
                 end_date,
                 duration,
@@ -350,7 +439,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
             .map(({ id, name, amount, start_date, end_date, duration }) => ({
               id,
               name,
-              amount: typeof amount === 'string' ? parseInputAmount(amount) : amount || 0,
+              amount: convertFullAmountToDeliverableAmount(typeof amount === 'string' ? parseInputAmount(amount) : amount || 0),
               start_date,
               end_date,
               duration,
@@ -654,7 +743,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
                               />
                               <input
                                 type="text"
-                                value={deliverable.duration + " months "}
+                                value={formatDuration(deliverable.duration)}
                                 disabled={true}
                                 className="flex-1 border rounded-md px-3 py-2 bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 title="Duration (calculated automatically)"
@@ -751,7 +840,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
           ) : (
             <span className="text-red-600">
               (Doesn't match project execution duration:{" "}
-              {convertToMonths(projectDetails.execution_duration)} months)
+              {formatProjectDuration(projectDetails.execution_duration)})
             </span>
           )}
         </span>

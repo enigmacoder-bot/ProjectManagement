@@ -37,19 +37,19 @@ const ProjectTiles = ({ project , projectId }) => {
     program: "",
     mainBusinessOwner: "",
     creationDate: "",
-    plannedBudget: "1,500,000 SAR",
-    plannedInvoices: "900,000 SAR",
-    plannedInvoicesPercentage: "60%",
-    deliverables: "8",
-    partiallyDelayed: "1",
-    delayed: "1",
-    onPlan: "3",
-    notStarted: "1",
-    completed: "2",
-    invoiced: "500,000 SAR",
-    delayedInvoices: "100,000 SAR",
-    delayedInvoicesPercentage: "6%",
-    schedulePerformanceIndex: ".78",
+    plannedBudget: "0 SAR",
+    plannedInvoices: "0 SAR",
+    plannedInvoicesPercentage: "0%",
+    deliverables: "0",
+    partiallyDelayed: "0",
+    delayed: "0",
+    onPlan: "0",
+    notStarted: "0",
+    completed: "0",
+    invoiced: "0 SAR",
+    delayedInvoices: "0 SAR",
+    delayedInvoicesPercentage: "0%",
+    schedulePerformanceIndex: "0",
     scheduleVariance: "",
     actualCompletion: "",
     actualCompletionPercentage: "",
@@ -71,8 +71,7 @@ const ProjectTiles = ({ project , projectId }) => {
   // } 
   const fetchProjectAndRelatedDetails = async ()=>{
     const response = await axiosInstance.get(`/project-card/project-details/${projectId}`);
-    const data = response.data.result[0];
-    console.log("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
+    const data = response.data.result;    console.log("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
     console.log(data);
     const dataObject = {
     id: data?.id,
@@ -81,41 +80,38 @@ const ProjectTiles = ({ project , projectId }) => {
     category: data?.category,
     initiative: data.initiative_name,
     portfolio: data.portfolio_name,
-    altProjectManager: `${data.alt_project_manager_first_name+' '+data.alt_project_manager_family_name}`,
+    altProjectManager: `${(data.alt_project_manager_first_name || '') + ' ' + (data.alt_project_manager_family_name || '')}`.trim(),
     vendor: data.vendor_name,
     program: data.program_name,
     mainBusinessOwner: "",
-    creationDate: data?.created_date.split('T')[0],
-    plannedBudget: `${data.project_budget} SAR`,
-    plannedInvoices: "900,000 SAR",
-    plannedInvoicesPercentage: "60%",
-    deliverables: "8",
-    partiallyDelayed: "1",
-    delayed: "1",
-    onPlan: "3",
-    notStarted: "1",
-    completed: "2",
-    invoiced: "500,000 SAR",
-    delayedInvoices: "100,000 SAR",
-    delayedInvoicesPercentage: "6%",
-    schedulePerformanceIndex: ".78",
-    scheduleVariance: "",
-    actualCompletion: "",
+    creationDate: data?.created_date ? data.created_date.split('T')[0] : "",
+    plannedBudget: `${data.project_budget || data.approved_project_budget || 0} SAR`,
+    plannedInvoices: `${data.plannedInvoices || 0} SAR`,
+    plannedInvoicesPercentage: `${data.plannedInvoicesPercentage || 0}%`,
+    deliverables: data.total || 0,
+    partiallyDelayed: data.partialDelayed || 0,
+    delayed: data.delayed || 0,
+    onPlan: data.onPlan || 0,
+    notStarted: data.notStarted || 0,
+    completed: data.completed || 0,
+    invoiced: `${data.totalInvoiced || data.total_invoiced || 0} SAR`,
+    delayedInvoices: `${data.delayedInvoices || 0} SAR`,    delayedInvoicesPercentage: `${data.delayedInvoicesPercentage || 0}%`,
+    schedulePerformanceIndex: data.schedulePerformanceIndex || "0.00",
+    scheduleVariance: `${data.scheduleVariance || 0}%`,
+    actualCompletion: `${data.actualCompletion || 0}%`,
     actualCompletionPercentage: "",
-    plannedCompletion: "",
-    executionStartDate: "",
-    executionEndDate: "",
-    duration: "",
-    maintenanceStartDate: "",
-    maintenanceEndDate: "",
-    maintenanceDuration: "",
+    plannedCompletion: `${data.plannedCompletion || 0}%`,
+    executionStartDate: data.execution_start_date ? data.execution_start_date.split('T')[0] : "",
+    executionEndDate: data.execution_start_date && data.execution_duration ? 
+      new Date(new Date(data.execution_start_date).setDate(new Date(data.execution_start_date).getDate() + parseInt(data.execution_duration))).toISOString().split('T')[0] : "",
+    duration: data.execution_duration || "",
   }
   setProjectData(dataObject);
 
   }
-  useState(()=>{
+  useEffect(() => {
     fetchProjectAndRelatedDetails();
-  },[projectId])
+  }, [projectId, project])
   // Sample data matching the reference
   // const projectData = {
   //   id: `${selectedProject.id}`,
@@ -217,9 +213,9 @@ const ProjectTiles = ({ project , projectId }) => {
     { label: "EXECUTION START DATE", value: projectData.executionStartDate },
     { label: "EXECUTION END DATE", value: projectData.executionEndDate },
     { label: "Duration", value: projectData.duration },
-    { label: "Maintenance and operation", value: projectData.maintenanceStartDate },
-    { label: "Maintenance and operation", value: projectData.maintenanceEndDate },
-    { label: "Duration", value: projectData.maintenanceDuration },
+    // { label: "Maintenance and operation", value: projectData.maintenanceStartDate },
+    // { label: "Maintenance and operation", value: projectData.maintenanceEndDate },
+    // { label: "Duration", value: projectData.maintenanceDuration },
   ];
 
   const getStatTileStyles = (stat) => {

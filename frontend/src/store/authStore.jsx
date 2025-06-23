@@ -4,6 +4,7 @@ const useAuthStore = create((set) => ({
   token: localStorage.getItem("token") || null,
   role: localStorage.getItem("role") || null,
   userId: localStorage.getItem("userId") || null,
+  email: localStorage.getItem("email") || null,
   users: [],
   projectTypes: [],
   projectPhases: [],
@@ -13,6 +14,7 @@ const useAuthStore = create((set) => ({
   initiatives: [],
   meetingId: localStorage.getItem("meetingId") || null,
   selectedProject: null, // Add new state for selected project
+  isMeetingPage: false, // Add new state for meeting page
   setToken: (token) => {
     set({ token });
     localStorage.setItem("token", token);
@@ -26,10 +28,16 @@ const useAuthStore = create((set) => ({
     set({ userId });
     localStorage.setItem("userId", userId);
   },
+  setEmail: (email) => {
+    // Add setter for email
+    set({ email });
+    localStorage.setItem("email", email);
+  },
   clearToken: () => {
-    set({ token: null, role: null });
+    set({ token: null, role: null, email: null, isMeetingPage: false });
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("email");
   },
   setUsers: (users) => {
     set({ users });
@@ -58,6 +66,12 @@ const useAuthStore = create((set) => ({
   },
   setSelectedProject: (project) => { // Add setter for selected project
     set({ selectedProject: project });
+  },
+  setIsMeetingPage: (isMeetingPage) => { // Add setter for meeting page
+    set({ isMeetingPage });
+  },
+  resetMeetingPage: () => { // Add function to reset meeting page flag
+    set({ isMeetingPage: false });
   },
 }));
 

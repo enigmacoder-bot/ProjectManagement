@@ -184,7 +184,7 @@ const ProjectCards = ({ projectId , projectName , phaseName }) => {
     <div className="p-6">
       {/* Removed the main "Project Cards" h1 title as sections will have their own */}
       <div className="my-6">
-        <h2 className="text-xl font-semibold mb-3 text-gray-800 dark:text-white">
+        {/* <h2 className="text-xl font-semibold mb-3 text-gray-800 dark:text-white">
           Project Deliverables
         </h2>
         {loadingDeliverables && <p>Loading deliverables...</p>}
@@ -198,14 +198,14 @@ const ProjectCards = ({ projectId , projectName , phaseName }) => {
             tableName="projectDeliverables"
             projectId={projectId} // Add projectId here
           />
-        )}
-      </div>      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        {/* Pass projectId to ProjectDeliverables so it fetches its own data - 50% width */}
-        <div>
+        )} */}
+      </div>      <div className="grid grid-cols-1 lg:grid-cols-20 gap-6 mt-8">
+        {/* Pass projectId to ProjectDeliverables so it fetches its own data - 65% width */}
+        <div className="lg:col-span-13">
           <ProjectDeliverables projectId={projectId} />
         </div>
-        {/* ProjectTasks - 50% width */}
-        <div>
+        {/* ProjectTasks - 35% width */}
+        <div className="lg:col-span-7">
           <ProjectTasks projectId={projectId} />
         </div>
       </div>

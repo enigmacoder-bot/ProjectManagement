@@ -852,10 +852,10 @@ const ProjectModal = ({
         beneficiary_departments: selectedDepartmentIds,
         objectives: selectedObjectiveIds,
         project_budget: data.project_budget
-          ? parseFloat(data.project_budget) / 1_000_000
+          ? parseFloat(data.project_budget)
           : null,
         approved_project_budget: data.approved_budget
-          ? parseFloat(data.approved_budget) / 1_000_000
+          ? parseFloat(data.approved_budget)
           : null,
         execution_start_date: data.execution_start_date?.startDate || null,
         execution_duration: durationInDays,
@@ -868,10 +868,7 @@ const ProjectModal = ({
       const projectResponse = await axiosInstance.post(
         `/data-management/addProject`,
         {
-          data: {
-            ...projectData,
-            project_budget: data.project_budget,
-          },
+          data: projectData,
           userId: 1,
         },
         {

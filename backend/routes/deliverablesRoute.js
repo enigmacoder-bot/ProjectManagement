@@ -12,6 +12,9 @@ const {
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
+// GET /deliverables/project/:projectId/statistics - Get deliverable statistics for project tiles
+router.get('/project/:projectId/statistics', deliverableController.getDeliverableStatistics);
+
 // POST /deliverables/get-project-deliverables - Get deliverables for a project
 // Keeping verifyToken for this one as it's a GET-like operation
 router.post('/get-project-deliverables', verifyToken, deliverableController.getProjectDeliverablesFromBody);

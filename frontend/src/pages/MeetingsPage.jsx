@@ -1,4 +1,5 @@
 import React, { useState , useEffect , useRef} from "react";
+import { useNavigate } from "react-router-dom";
 import TopHeader from "../components/TopHeader";
 import ProjectMeetingSidebar from "../components/ProjectMeetingSidebar";
 import MeetingNotesSection from "../components/MeetingNotesSection";
@@ -21,7 +22,8 @@ const MeetingsPage = () => {
   const [subFilters , setSubFilters] = useState([]);
   const [activeSubFilter , setActiveSubFilter] = useState("");
   const [projects , setProjects] = useState([]);
-  const { meetingId, selectedProject, setSelectedProject } = useAuthStore(); // Use store
+  const { meetingId, selectedProject, setSelectedProject, setIsMeetingPage } = useAuthStore(); // Use store
+  const navigate = useNavigate();
   const subFiltersCache = useRef({});
   // const [selectedProjectId, setSelectedProjectId] = useState(null); // Remove local state
 
@@ -83,6 +85,12 @@ const MeetingsPage = () => {
 
   }
 
+  // Handle back button click - navigate to dashboard and reset meeting state
+  const handleBackToDashboard = () => {
+    setIsMeetingPage(false);
+    navigate('/dashboard');
+  };
+
   // Show project select cards for any tab (for demo)
   const showProjectCards = !!activeSubFilter;
 
@@ -132,7 +140,7 @@ const MeetingsPage = () => {
             <div className="p-6">
               <button
                 className="inline-flex items-center border border-indigo-300 px-3 py-1.5 rounded-md text-blue-600 hover:bg-blue-50 mb-4"
-                onClick={() => setSelectedProject(null)}
+                onClick={handleBackToDashboard}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
