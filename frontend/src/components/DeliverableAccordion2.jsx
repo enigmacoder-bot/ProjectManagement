@@ -42,22 +42,54 @@ const convertItemUnitAmountToFullAmount = (unitAmount) => {
 
 // Helper function to format duration properly
 const formatDuration = (duration) => {
-  if (!duration) return "0 months";
+  if (!duration) return "0 days";
   
   const numericDuration = parseFloat(duration);
-  if (isNaN(numericDuration)) return "0 months";
+  if (isNaN(numericDuration)) return "0 days";
   
-  // If duration is less than 1 month, show in days
-  if (numericDuration < 1) {
-    const days = Math.round(numericDuration * 30.44); // Average days per month
+  // If duration is already formatted with days, return as is
+  if (typeof duration === 'string' && duration.includes('day')) {
+    return duration;
+  }
+  
+  // If duration is less than 1 month or exactly 1 month, show in days for clarity
+  if (numericDuration <= 1) {
+    const days = Math.round(numericDuration * 30.436875); // More accurate days per month
     return `${days} days`;
   }
   
-  // Show in months with 1 decimal place if needed
+  // For durations >= 1 month, we have options:
+  
+  // Option 1: For whole months, show as "X months"
   if (numericDuration % 1 === 0) {
     return `${Math.round(numericDuration)} months`;
-  } else {
-    return `${numericDuration.toFixed(1)} months`;
+  } 
+  
+  // Option 2: For smaller fractional months (< 2), show in days for better understanding
+  else if (numericDuration < 2) {
+    const days = Math.round(numericDuration * 30.436875);
+    return `${days} days`;
+  }
+  
+  // Option 3: For larger durations with fractions, show in a more understandable format
+  else {
+    // Convert to days if it's clearer (especially for values like 1.2 months)
+    const days = Math.round(numericDuration * 30.436875);
+    
+    // If close to a whole number of months, round to months
+    if (Math.abs(numericDuration - Math.round(numericDuration)) < 0.1) {
+      return `${Math.round(numericDuration)} months`;
+    } 
+    // Otherwise show days if that's more intuitive
+    else if (days <= 60) {
+      return `${days} days`;
+    }
+    // For longer durations, show months with days
+    else {
+      const wholeMonths = Math.floor(numericDuration);
+      const remainingDays = Math.round((numericDuration - wholeMonths) * 30.436875);
+      return `${wholeMonths} months, ${remainingDays} days`;
+    }
   }
 };
 
@@ -136,64 +168,133 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
   const calculateItemTotalDuration = (deliverables) => {
     if (!deliverables || deliverables.length === 0) return 0;
 
-    return deliverables
-      .reduce((total, deliverable) => {
-        // Parse the duration (remove " months " suffix if present)
-        const durationValue =
-          parseFloat(
-            deliverable.duration?.toString().replace(" months ", "")
-          ) || 0;
-        return total + durationValue;
-      }, 0)
-      .toFixed(1);
+    let totalDays = 0;
+    
+    deliverables.forEach(deliverable => {
+      if (deliverable.duration) {
+        if (typeof deliverable.duration === 'string' && deliverable.duration.includes('day')) {
+          // Extract days from "X days" format
+          const match = deliverable.duration.match(/(\d+)/);
+          totalDays += match ? parseInt(match[1], 10) : 0;
+        } else {
+          // Convert months to days
+          const months = parseFloat(deliverable.duration) || 0;
+          totalDays += months * 30.436875; // Convert months to days
+        }
+      }
+    });
+    
+    // Return days if less than 30 days total
+    if (totalDays <= 30) {
+      return `${Math.round(totalDays)} days`;
+    }
+    
+    // Otherwise return in months
+    return (totalDays / 30.436875).toFixed(1);
   };
 
   // Calculate total duration across all items
   const calculateTotalProjectDuration = () => {
     if (!items || items.length === 0) return 0;
 
-    let totalDuration = 0;
+    let totalDays = 0;
+    
     items.forEach((item) => {
       if (item.deliverables && item.deliverables.length > 0) {
         item.deliverables.forEach((deliverable) => {
-          const durationValue =
-            parseFloat(
-              deliverable.duration?.toString().replace(" months ", "")
-            ) || 0;
-          totalDuration += durationValue;
+          if (deliverable.duration) {
+            if (typeof deliverable.duration === 'string' && deliverable.duration.includes('day')) {
+              // Extract days from "X days" format
+              const match = deliverable.duration.match(/(\d+)/);
+              totalDays += match ? parseInt(match[1], 10) : 0;
+            } else {
+              // Convert months to days
+              const months = parseFloat(deliverable.duration) || 0;
+              totalDays += months * 30.436875; // Convert months to days
+            }
+          }
         });
       }
     });
-
-    return totalDuration.toFixed(1);
+    
+    // Return days if less than 30 days total
+    if (totalDays <= 30) {
+      return `${Math.round(totalDays)} days`;
+    }
+    
+    // Otherwise return in months
+    return (totalDays / 30.436875).toFixed(1);
   };
 
   const convertToMonths = (duration) => {
     if (!duration) return 0;
 
-    const durationStr = duration.toLowerCase(); // Normalize input
+    const durationStr = String(duration).toLowerCase(); // Normalize input and ensure it's a string
     let totalDays = 0;
 
     if (durationStr.includes("day")) {
-      totalDays = parseInt(durationStr); // Extract number of days
+      // Extract the numeric part from strings like "30 days"
+      const match = durationStr.match(/(\d+)/);
+      totalDays = match ? parseInt(match[1], 10) : 0;
     } else if (durationStr.includes("week")) {
-      totalDays = parseInt(durationStr) * 7; // Convert weeks to days
+      // Extract the numeric part from strings like "4 weeks"
+      const match = durationStr.match(/(\d+)/);
+      const weeks = match ? parseInt(match[1], 10) : 0;
+      totalDays = weeks * 7; // Convert weeks to days
+    } else if (durationStr.includes("month")) {
+      // Extract the numeric part from strings like "2 months"
+      const match = durationStr.match(/(\d+(\.\d+)?)/);
+      const months = match ? parseFloat(match[1]) : 0;
+      return months.toFixed(1); // Already in months, just format it
+    } else if (!isNaN(parseFloat(durationStr))) {
+      // If it's just a number, assume it's already in months
+      return parseFloat(durationStr).toFixed(1);
     }
 
-    return (totalDays / 30).toFixed(1); // Convert to months (approx)
+    // Use the more accurate days per month value
+    return (totalDays / 30.436875).toFixed(1); // Convert to months using average days per month
   };
 
   // Better function to format project duration
   const formatProjectDuration = (duration) => {
     if (!duration) return "0";
 
-    const durationStr = duration.toLowerCase(); // Normalize input
+    // Handle if duration is already a number (assuming months)
+    if (typeof duration === 'number') {
+      if (duration < 1) {
+        // Convert small durations to days
+        const days = Math.round(duration * 30.436875);
+        return `${days} days`;
+      }
+      return duration % 1 === 0 ? `${Math.round(duration)} months` : `${duration.toFixed(1)} months`;
+    }
+
+    const durationStr = String(duration).toLowerCase(); // Normalize input
+    
+    // If it's already formatted with "months", return as is
+    if (durationStr.includes("month")) {
+      return durationStr;
+    }
+    
+    // If it's just a number as string, assume it's months
+    if (!isNaN(parseFloat(durationStr)) && !/[a-z]/.test(durationStr)) {
+      const months = parseFloat(durationStr);
+      if (months < 1) {
+        const days = Math.round(months * 30.436875);
+        return `${days} days`;
+      }
+      return months % 1 === 0 ? `${Math.round(months)} months` : `${months.toFixed(1)} months`;
+    }
+    
     let totalDays = 0;
 
     if (durationStr.includes("day")) {
-      totalDays = parseInt(durationStr); // Extract number of days
+      const match = durationStr.match(/(\d+)/);
+      totalDays = match ? parseInt(match[1], 10) : 0;
     } else if (durationStr.includes("week")) {
-      totalDays = parseInt(durationStr) * 7; // Convert weeks to days
+      const match = durationStr.match(/(\d+)/);
+      const weeks = match ? parseInt(match[1], 10) : 0;
+      totalDays = weeks * 7; // Convert weeks to days
     }
 
     // If less than 30 days, show in days
@@ -202,7 +303,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
     }
     
     // If more than 30 days, show in months with appropriate format
-    const months = totalDays / 30;
+    const months = totalDays / 30.436875;
     if (months % 1 === 0) {
       return `${Math.round(months)} months`;
     } else {
@@ -238,12 +339,19 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
             const timeDiff = end.getTime() - start.getTime();
             const totalDays = Math.floor(timeDiff / (1000 * 3600 * 24)) + 1;
 
-            // Convert to months with decimal days (average month length)
-            const averageDaysPerMonth = 30.436875; // 365/12
-            const durationMonths = totalDays / averageDaysPerMonth;
-
-            // Format to 1 decimal place (e.g., "2.3" months)
-            deliverable.duration = durationMonths.toFixed(1);
+            // Store duration in days if less than 30 days
+            if (totalDays <= 30) {
+              // Store as a string with "days" for clarity
+              deliverable.duration = `${totalDays} days`;
+            } else {
+              // For longer durations, convert to months
+              const averageDaysPerMonth = 30.436875; // 365.25/12
+              const durationMonths = totalDays / averageDaysPerMonth;
+              deliverable.duration = durationMonths.toFixed(1);
+            }
+            
+            // Log to help debug duration calculations
+            console.log(`Duration calculated: ${totalDays} days = ${deliverable.duration}`);
           } else {
             deliverable.duration = ""; // Invalid date range
           }
@@ -348,11 +456,54 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
 
   const validateDurations = () => {
     const totalDuration = calculateTotalProjectDuration();
-    const projectDuration = projectDetails.execution_duration;
+    
+    // Convert both durations to days for comparison
+    let totalDurationDays;
+    if (typeof totalDuration === 'string' && totalDuration.includes('day')) {
+      // If already in days format
+      const match = totalDuration.match(/(\d+)/);
+      totalDurationDays = match ? parseInt(match[1], 10) : 0;
+    } else {
+      // If in months format
+      totalDurationDays = parseFloat(totalDuration) * 30.436875;
+    }
+    
+    // Parse project execution duration to get days
+    let projectDurationDays;
+    if (typeof projectDetails.execution_duration === 'string') {
+      if (projectDetails.execution_duration.includes('day')) {
+        // Already in days
+        const match = projectDetails.execution_duration.match(/(\d+)/);
+        projectDurationDays = match ? parseInt(match[1], 10) : 0;
+      } else if (projectDetails.execution_duration.includes('week')) {
+        // Convert weeks to days
+        const match = projectDetails.execution_duration.match(/(\d+)/);
+        const weeks = match ? parseInt(match[1], 10) : 0;
+        projectDurationDays = weeks * 7;
+      } else if (projectDetails.execution_duration.includes('month')) {
+        // Convert months to days
+        const match = projectDetails.execution_duration.match(/(\d+(\.\d+)?)/);
+        const months = match ? parseFloat(match[1]) : 0;
+        projectDurationDays = months * 30.436875;
+      } else {
+        // Try to parse as a number representing months
+        projectDurationDays = parseFloat(projectDetails.execution_duration) * 30.436875;
+      }
+    } else {
+      // If it's a number directly (assume months)
+      projectDurationDays = parseFloat(projectDetails.execution_duration) * 30.436875;
+    }
+    
+    // Format both for display
+    const totalDurationFormatted = formatDuration(totalDuration);
+    const projectDurationFormatted = formatProjectDuration(projectDetails.execution_duration);
 
-    if (totalDuration !== projectDuration) {
+    // Allow a small tolerance for comparison (2 days or ~5% of project duration)
+    const tolerance = Math.max(2, projectDurationDays * 0.05);
+    
+    if (Math.abs(totalDurationDays - projectDurationDays) > tolerance) {
       toast.error(
-        `Total deliverable duration (${totalDuration} months) doesn't match project execution duration (${projectDuration} months)`
+        `Total deliverable duration (${totalDurationFormatted}) doesn't match project execution duration (${projectDurationFormatted})`
       );
       return false;
     }
@@ -814,8 +965,7 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
                           <p className="font-medium text-blue-800">
                             Total Duration for {item.name}:{" "}
                             <span className="font-bold">
-                              {calculateItemTotalDuration(item.deliverables)}{" "}
-                              months
+                              {formatDuration(calculateItemTotalDuration(item.deliverables))}
                             </span>
                           </p>
                         </div>
@@ -830,20 +980,28 @@ const DeliverablesAccordion2 = ({ project, closeAccordion }) => {
       </div>
 
       {/* Display total project duration */}
-      {projectDetails.execution_duration && (
-        <span className="ml-2">
-          {calculateTotalProjectDuration() ==
-          convertToMonths(projectDetails.execution_duration) ? (
-            <span className="text-green-600">
-              (Matches project execution duration)
+      {items.length > 0 && (
+        <div className="my-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="font-medium text-blue-800">
+            Total Duration for Test: <span className="font-bold">
+              {formatDuration(calculateTotalProjectDuration())}
             </span>
-          ) : (
-            <span className="text-red-600">
-              (Doesn't match project execution duration:{" "}
-              {formatProjectDuration(projectDetails.execution_duration)})
-            </span>
-          )}
-        </span>
+            {projectDetails.execution_duration && (
+              <span className="ml-2">
+                {Math.abs(parseFloat(calculateTotalProjectDuration()) - parseFloat(convertToMonths(projectDetails.execution_duration))) <= 0.1 ? (
+                  <span className="text-green-600">
+                    (Matches project execution duration)
+                  </span>
+                ) : (
+                  <span className="text-red-600">
+                    (Doesn't match project execution duration:{" "}
+                    {formatProjectDuration(projectDetails.execution_duration)})
+                  </span>
+                )}
+              </span>
+            )}
+          </p>
+        </div>
       )}
 
       <div className="mt-8 flex justify-end">

@@ -738,7 +738,7 @@ const DataManagementPage = () => {
 
         {/* Dynamic Form Modal */}
         {showForm && (
-          <div className="fixed inset-0 flex justify-center items-center  bg-black/45 backdrop-blur-sm z-50">
+          <div className="fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm z-50">
             <div className="max-w-3xl bg-white dark:bg-black p-6 rounded-lg shadow-lg w-full mx-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold">
@@ -783,7 +783,7 @@ const DataManagementPage = () => {
 
         {/* Project Modal */}
         {showProjectModal && (
-          <div className="fixed inset-0 flex justify-center items-start bg-black bg-opacity-50 z-50 overflow-y-auto p-4">
+          <div className="fixed inset-0 flex justify-center items-start bg-black/50 z-50 overflow-y-auto p-4">
             <div className="my-4 mx-auto w-full max-w-6xl">
               <div className="relative">
                 <button

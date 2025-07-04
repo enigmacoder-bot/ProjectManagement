@@ -204,7 +204,7 @@ const SystemSettingsPage = () => {
         refreshUsers={() => console.log("Refresh users")} // Placeholder for refresh logic
       /> */}
       {showForm && (
-        <div className="fixed inset-0 flex justify-center items-center  bg-black/45 backdrop-blur-sm z-50">
+        <div className="fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm z-50">
           <div className="max-w-3xl bg-white dark:bg-black p-6 rounded-lg shadow-lg w-full mx-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Add User</h2>

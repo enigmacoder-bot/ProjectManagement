@@ -158,7 +158,7 @@ const MeetingNotesSection = ({meetingId , projectId}) => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex justify-center items-center">
+        <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center">
           <div className="bg-white w-full max-w-md rounded-lg shadow-lg p-6 relative">
             <button
               className="absolute top-3 right-3 text-gray-500 hover:text-gray-800"

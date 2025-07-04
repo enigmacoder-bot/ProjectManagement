@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { X, ChevronDown, ChevronUp } from "lucide-react";
-import UpdateProjectDocumentSection from "./UpdateProjectDocumentSection";
+import { X, ChevronDown, ChevronUp, FileText, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import useAuthStore from "../store/authStore";
-import UpdateSchedulePlanSection from "./UpdateSchedulePlanSection";
-import InternalSchedulePlanSection from "./InternalSchedulePlanSection";
 import axiosInstance from "../axiosInstance";
+import ProjectDocumentsModal from "./ProjectDocumentsModal";
+import ProjectSchedulePlanModal from "./ProjectSchedulePlanModal";
 
 const UpdateProjectModal = ({
   onClose,
@@ -17,19 +16,22 @@ const UpdateProjectModal = ({
   readOnly = false,
 }) => {
   const [activeSection, setActiveSection] = useState("all");
-  const [scheduleTableData, setScheduleTableData] = useState([]);
-  const [internalScheduleDataState, setInternalScheduleDataState] = useState(
-    []
-  );
   const [departments, setDepartments] = useState([]);
   const [initiatives, setInitiatives] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [objectives, setObjectives] = useState([]);
-  const [localFiles, setLocalFiles] = useState([]);
   const [selectedProgramDetails, setSelectedProgramDetails] = useState(null);
-  const [scheduleData, setScheduleData] = useState({ schedule: [] });
+  // State for document and schedule modals
+  const [isProjectDocumentsModalOpen, setIsProjectDocumentsModalOpen] =
+    useState(false);
+  const [isProjectSchedulePlanModalOpen, setIsProjectSchedulePlanModalOpen] =
+    useState(false);
+  // Add placeholder states/functions to satisfy legacy schedule reset logic
+  const [scheduleTableData, setScheduleTableData] = useState([]);
+  const [internalScheduleDataState, setInternalScheduleDataState] = useState([]);
+  const internalScheduleData = [];
 
   const { users, projectTypes, projectPhases, setDocuments, documents } =
     useAuthStore();
@@ -83,7 +85,6 @@ const UpdateProjectModal = ({
           ? new Date(projectData.execution_start_date)
           : null,
       },
-      documents: projectData?.documents || [],
     },
   });
 
@@ -92,31 +93,6 @@ const UpdateProjectModal = ({
   const projectType = watch("project_type_id");
   const currentPhase = watch("current_phase_id");
   const selectedProgramId = watch("program_id");
-
-  // Initial internal schedule data for Internal (1) and Proof of Concept (4) projects
-  const internalScheduleData = useMemo(
-    () => [
-      {
-        id: 1,
-        mainPhase: "Planning",
-        subPhase: "Prepare scope",
-        duration: "28 days",
-        durationDays: 28,
-        startDate: null,
-        endDate: null,
-      },
-      {
-        id: 4,
-        mainPhase: "Execution",
-        subPhase: "Execute phase",
-        duration: "28 days",
-        durationDays: 28,
-        startDate: null,
-        endDate: null,
-      },
-    ],
-    []
-  );
 
   const projectManagers = useMemo(() => {
     return users.filter((user) => user.role_name === "PM");
@@ -146,24 +122,6 @@ const UpdateProjectModal = ({
     return restrictedTypes.includes(currentType?.name || "");
   }, [projectType, projectTypes]);
 
-  // Reset schedule data when project type changes
-  useEffect(() => {
-    const isInternal = ["1", "4"].includes(projectType);
-    if (isInternal) {
-      // Reset external schedule data and set internal schedule data
-      setScheduleTableData([]);
-      if (!internalScheduleDataState.length) {
-        setInternalScheduleDataState(internalScheduleData);
-      }
-    } else {
-      // Reset internal schedule data; UpdateSchedulePlanSection will fetch its own data
-      setInternalScheduleDataState([]);
-      if (!scheduleTableData.length && projectData?.id) {
-        // Trigger fetch in UpdateSchedulePlanSection via projectData
-        setScheduleTableData([]); // Reset to trigger re-fetch
-      }
-    }
-  }, [projectType, internalScheduleData, projectData?.id]);
 
   // Fetch departments and beneficiary departments
   useEffect(() => {
@@ -294,67 +252,6 @@ const UpdateProjectModal = ({
     fetchProgramDetails(selectedProgramId);
   }, [selectedProgramId]);
 
-  // Fetch documents based on current phase
-  useEffect(() => {
-    if (currentPhase) {
-      const selectedPhase = projectPhases.find(
-        (phase) => phase.id === parseInt(currentPhase, 10)
-      );
-      if (selectedPhase) {
-        getCurrentPhaseDocumentTemplates(selectedPhase.name);
-      }
-    }
-  }, [currentPhase, projectPhases]);
-
-  const getCurrentPhaseDocumentTemplates = async (phase) => {
-    try {
-      const result = await axiosInstance.post(
-        `/data-management/getCurrentPhaseDocumentTemplates`,
-        { phase }
-      );
-      setDocuments(result.data.data);
-      return result.data.data;
-    } catch (error) {
-      console.error("Error fetching document templates:", error);
-      toast.error("Failed to load document templates");
-      return [];
-    }
-  };
-  const handleScheduleUpdate = useCallback(
-    (newData) => {
-      setScheduleData((prev) => {
-        // Deep comparison to prevent unnecessary updates
-        const isSame =
-          prev.executionStartDate === newData.executionStartDate &&
-          prev.executionDuration === newData.executionDuration &&
-          prev.maintenanceDate === newData.maintenanceDate &&
-          JSON.stringify(prev.schedule) === JSON.stringify(newData.schedule);
-        return isSame ? prev : { ...newData };
-      });
-    },
-    [] // Empty dependency array since it only uses setScheduleData
-  );
-
-  // Handle schedule changes
-  const handleScheduleChange = useCallback(
-    (data) => {
-      const isInternal = ["1", "4"].includes(projectType);
-      if (isInternal) {
-        setInternalScheduleDataState(data);
-      } else {
-        setScheduleTableData(data);
-        setValue("execution_duration", data.executionDuration);
-        if (data.executionStartDate) {
-          setValue("execution_start_date", new Date(data.executionStartDate));
-        }
-        if (data.maintenanceDate) {
-          setValue("maintenance_duration", new Date(data.maintenanceDate));
-        }
-      }
-    },
-    [projectType]
-  );
-
   const onSubmit = async (data, sendForApproval = false) => {
     try {
       const selectedDepartmentIds = departments
@@ -391,9 +288,9 @@ const UpdateProjectModal = ({
         approved_project_budget: data.approved_budget
           ? parseFloat(data.approved_budget)
           : null,
-        execution_start_date: scheduleData.executionStartDate || null, // Use scheduleData
-        execution_duration: scheduleData.executionDuration || null, // Already formatted as "X weeks"
-        maintenance_duration: scheduleData.maintenanceDate || null,
+        execution_start_date: data.execution_start_date?.startDate || null,
+        execution_duration: data.execution_duration || null,
+        maintenance_duration: data.maintenance_duration || null,
         approval_status: sendForApproval
           ? "Waiting on deputy"
           : projectData.approval_status,
@@ -414,57 +311,6 @@ const UpdateProjectModal = ({
           projectId: projectData.id,
           objectiveIds: selectedObjectiveIds,
         });
-
-        if (localFiles.length > 0) {
-          await uploadDocuments(projectData.id, localFiles);
-        }
-
-        const isInternal = ["1", "4"].includes(projectType);
-        if (isInternal && internalScheduleDataState.length > 0) {
-          const internalScheduleResponse = await axiosInstance.post(
-            `/data-management/upsertInternalSchedulePlan`,
-            {
-              projectId: projectData.id,
-              schedule: internalScheduleDataState.map((phase) => ({
-                phaseId: phase.id,
-                durationDays: phase.durationDays,
-                startDate: phase.startDate, // Assuming this is already "yyyy-MM-dd"
-                endDate: phase.endDate,
-              })),
-            }
-          );
-          if (internalScheduleResponse.data.status !== "success") {
-            throw new Error("Failed to save internal schedule plan");
-          }
-        } else if (scheduleData.schedule?.length > 0) {
-          // Use scheduleData.schedule
-          const formattedSchedule = scheduleData.schedule.map((phase) => ({
-            phaseId: phase.phaseId,
-            durationDays: phase.durationDays,
-            startDate:
-              phase.startDate && isValid(parseISO(phase.startDate))
-                ? format(parseISO(phase.startDate), "yyyy-MM-dd")
-                : null,
-            endDate:
-              phase.endDate && isValid(parseISO(phase.endDate))
-                ? format(parseISO(phase.endDate), "yyyy-MM-dd")
-                : null,
-          }));
-
-          const schedulePlanResponse = await axiosInstance.post(
-            `/data-management/upsertSchedulePlan`,
-            {
-              projectId: projectData.id,
-              execution_duration: scheduleData.executionDuration, // "X weeks"
-              maintenance_duration: scheduleData.maintenanceDate,
-              execution_start_date: scheduleData.executionStartDate,
-              schedule: formattedSchedule,
-            }
-          );
-          if (schedulePlanResponse.data.status !== "success") {
-            throw new Error("Failed to save schedule plan");
-          }
-        }
 
         toast.success(
           sendForApproval
@@ -527,43 +373,6 @@ const UpdateProjectModal = ({
     );
   };
 
-  const uploadDocuments = async (projectId, localFiles) => {
-    for (const { index, file } of localFiles) {
-      if (!file) continue;
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("project_id", projectId);
-      formData.append("template_id", documents[index].id);
-      formData.append(
-        "phase",
-        projectPhases.find((p) => p.id === parseInt(currentPhase))?.name ||
-          "Unknown"
-      );
-
-      const response = await axiosInstance.post(
-        `/data-management/addProjectDocument`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-
-      if (response.data.status !== "success") {
-        throw new Error(`Failed to upload document: ${response.data.message}`);
-      }
-    }
-  };
-
-  const memoizedUpdateSchedulePlanSection = useMemo(
-    () => (
-      <UpdateSchedulePlanSection
-        projectData={projectData}
-        onScheduleUpdate={handleScheduleUpdate}
-        budget={projectData.project_budget}
-        projectType={projectType}
-      />
-    ),
-    [projectData, handleScheduleUpdate, projectType] // Only re-render if these change
-  );
-
   const shouldShowSection = (section) => {
     if (activeSection === "all") return true;
     switch (section) {
@@ -575,10 +384,6 @@ const UpdateProjectModal = ({
         if (projectType === "1") return false;
         if (["1", "2"].includes(currentPhase)) return false;
         return ["2", "3"].includes(projectType);
-      case "schedule":
-        return ["2", "3"].includes(projectType);
-      case "internalSchedule":
-        return ["1", "4"].includes(projectType);
       default:
         return true;
     }
@@ -598,12 +403,28 @@ const UpdateProjectModal = ({
       <div className="flex justify-between items-center p-4 border-b bg-white sticky top-0 z-10">
         <h2 className="text-xl font-semibold">{title}</h2>
         {showButtons && (
-          <button
-            className="text-gray-500 hover:text-gray-700"
-            onClick={onClose}
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              className="text-green-500 hover:text-green-700"
+              onClick={() => setIsProjectDocumentsModalOpen(true)}
+              title="Manage Project Documents"
+            >
+              <FileText size={20} />
+            </button>
+            <button
+              className="text-purple-500 hover:text-purple-700"
+              onClick={() => setIsProjectSchedulePlanModalOpen(true)}
+              title="Manage Schedule Plan"
+            >
+              <Calendar size={20} />
+            </button>
+            <button
+              className="text-gray-500 hover:text-gray-700"
+              onClick={onClose}
+            >
+              <X size={20} />
+            </button>
+          </div>
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-4">
@@ -1092,47 +913,6 @@ const UpdateProjectModal = ({
             </div>
           </div>
 
-          {/* Schedule Plan */}
-          {(shouldShowSection("schedule") ||
-            shouldShowSection("internalSchedule")) && (
-            <div>
-              {["1", "4"].includes(projectType) ? (
-                <InternalSchedulePlanSection
-                  onScheduleChange={handleScheduleChange}
-                  internalScheduleData={
-                    internalScheduleDataState.length
-                      ? internalScheduleDataState
-                      : internalScheduleData
-                  }
-                  projectId={projectData.id}
-                />
-              ) : (
-                <UpdateSchedulePlanSection
-                  projectData={projectData}
-                  onScheduleUpdate={handleScheduleUpdate}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Documents Section */}
-          <div className="mb-6 border-t pt-4">
-            <UpdateProjectDocumentSection
-              projectId={projectData.id}
-              projectPhaseId={currentPhase}
-              phaseName={
-                projectPhases.find((p) => p.id === parseInt(currentPhase))
-                  ?.name || "Unknown"
-              }
-              formMethods={{ setValue, watch }}
-              localFiles={localFiles}
-              setLocalFiles={setLocalFiles}
-              getCurrentPhaseDocumentTemplates={
-                getCurrentPhaseDocumentTemplates
-              }
-            />
-          </div>
-
           {/* Form Footer */}
           {showButtons && (
             <div className="flex justify-end space-x-4 mt-6 border-t pt-4">
@@ -1158,10 +938,67 @@ const UpdateProjectModal = ({
                   Save and Send for Approval
                 </button>
               )}
+              {/* New update document and schedule buttons */}
+              <button
+                type="button"
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                onClick={() => setIsProjectDocumentsModalOpen(true)}
+              >
+                Update Documents
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                onClick={() => setIsProjectSchedulePlanModalOpen(true)}
+              >
+                Update Schedule
+              </button>
             </div>
           )}
         </form>
       </div>
+      {/* Project Documents Modal */}
+      {isProjectDocumentsModalOpen && (
+        <ProjectDocumentsModal
+          isOpen={isProjectDocumentsModalOpen}
+          onClose={() => setIsProjectDocumentsModalOpen(false)}
+          projectId={projectData.id}
+          projectName={projectData.name}
+          currentPhase={projectData.current_phase_id}
+          isNewProject={false} // This is an existing project being updated
+        />
+      )}
+      {/* Project Schedule Plan Modal */}
+      {isProjectSchedulePlanModalOpen && (
+        <ProjectSchedulePlanModal
+          isOpen={isProjectSchedulePlanModalOpen}
+          onClose={() => setIsProjectSchedulePlanModalOpen(false)}
+          projectId={projectData.id}
+          projectName={projectData.name}
+          projectType={projectData.project_type_id}
+          projectBudget={projectData.project_budget}
+          executionStartDate={
+            projectData.execution_start_date
+              ? new Date(projectData.execution_start_date)
+              : null
+          }
+          executionDuration={
+            projectData.execution_duration
+              ? parseInt(String(projectData.execution_duration).split(" ")[0], 10)
+              : null
+          }
+          maintenanceDate={
+            projectData.maintenance_duration
+              ? new Date(projectData.maintenance_duration)
+              : null
+          }
+          executionDurationType={
+            projectData.execution_duration
+              ? String(projectData.execution_duration).split(" ")[1]
+              : 'weeks'
+          }
+        />
+      )}
     </div>
   );
 };

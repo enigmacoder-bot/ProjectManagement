@@ -40,7 +40,7 @@ const AddUserModal = ({ isOpen, onClose, refreshUsers }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/45 backdrop-blur-sm z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50">
       <div className="bg-white p-6 rounded-lg shadow-lg w-96 dark:bg-gray-900 dark:text-white">
         <h2 className="text-xl font-bold mb-4">Add New User</h2>
         <form onSubmit={handleSubmit(onSubmit)}>

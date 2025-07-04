@@ -5,7 +5,10 @@ import TableData from "../components/TableData";
 import axiosInstance from "../axiosInstance";
 import { constructNow } from "date-fns";
 import Pagination from "./Pagination";
-import { Hand } from "lucide-react";
+import { Eye, Download } from "lucide-react";
+import { getViewableDocumentUrl, getDownloadableDocumentUrl } from "../utils/supabaseUtils";
+import { toast } from "sonner";
+
 
 const defaultStatusData = [
   { title: "Initiation & Planning", count: 5, status: "completed" },
@@ -34,8 +37,9 @@ const defaultDocumentsData = [
 const columnSetting = [
   { columnName: "Phase", dbColumn: "project_phase", isVisible: true, isInput: false },
   { columnName: "Document Name", dbColumn: "document_name", isVisible: true, isInput: false },
-  { columnName: "Created Date", dbColumn: "updated_at", isVisible: true, isInput: false },
-  { columnName: "Document Template", dbColumn: "template_name", isVisible: true, isInput: false }
+  { columnName: "Template", dbColumn: "template_name", isVisible: true, isInput: false },
+  { columnName: "Upload Date", dbColumn: "updated_at", isVisible: true, isInput: false },
+  { columnName: "Actions", dbColumn: "actions", isVisible: true, isInput: false }
 ];
 
 export default function ProjectDocuments({ className = "" , projectId , phaseName }) {
@@ -82,18 +86,73 @@ export default function ProjectDocuments({ className = "" , projectId , phaseNam
     console.log("the currrent phase order is "+currentProjectPhaseIndex+"   the phase name is "+phaseName);
     setProjectoverviewData(projectOverView);
   }
+  // Utility function to get correct file URL
+  const getCorrectFileUrl = (doc) => {
+    // First try to use file_url which is the actual uploaded document
+    if (doc.file_url && doc.file_url.trim() !== '') {
+      return doc.file_url;
+    }
+    
+    // As a fallback, use document_url which might be the template URL
+    if (doc.document_url && doc.document_url.trim() !== '') {
+      return doc.document_url;
+    }
+    
+    return null;
+  };
+
   const fetchProjectDocuments = async()=>{
     const result = await axiosInstance.get(`/project-card/project-documents/${projectId}?page=${page}&limit=${limit}&searchTerm=${searchTerm}&sortType=${sortType}&sortOrder=${sortOrder}`)
-    console.log("the result of project documents");
-    console.log(result.data.result);
-    setProjectDocumentsData(result.data.result);
-    setTableData(result.data.result);
+    console.log("the result of project documents:", result.data.result);
+    
+    // Debug the structure of the first document
+    if (result.data.result && result.data.result.length > 0) {
+      console.log("Sample document structure:", result.data.result[0]);
+      console.log("File URL property present:", result.data.result.some(doc => doc.file_url));
+      console.log("Document URL property present:", result.data.result.some(doc => doc.document_url));
+      
+      // Map the documents to ensure we have the correct file URL
+      const mappedDocuments = result.data.result.map(doc => {
+        return {
+          ...doc,
+          // Ensure we use the correct file URL for each document
+          effective_file_url: getCorrectFileUrl(doc)
+        };
+      });
+      
+      setProjectDocumentsData(mappedDocuments);
+      setTableData(mappedDocuments);
+    } else {
+      setProjectDocumentsData(result.data.result || []);
+      setTableData(result.data.result || []);
+    }
+    
     setPagination(result.data.pagination);
   }
   const  refetchProjectDocuments = async(NavigatePage) =>{
     page = NavigatePage;
     fetchProjectDocuments();
   }
+  const handleViewDocument = (doc) => {
+    if (!doc || !doc.effective_file_url) {
+      toast.error("No document URL available.");
+      return;
+    }
+
+    try {
+      // Use the specialized utility function for viewable URLs
+      const viewUrl = getViewableDocumentUrl(doc.effective_file_url);
+      
+      console.log('Opening document URL:', viewUrl);
+      
+      // Open the document in a new tab
+      window.open(viewUrl, '_blank');
+    } catch (error) {
+      console.error('Error opening document:', error);
+      toast.error('Failed to open document. Please try again.');
+    }
+  };
+
   useEffect(()=>{
     fetchProjectDocumentOverview();
     fetchProjectDocuments();
@@ -149,7 +208,7 @@ export default function ProjectDocuments({ className = "" , projectId , phaseNam
         showDate={false}
         sortTableData={sortTableData}
         columnSetting={columnSetting}
-        showActionButtons={false}
+        showActionButtons={true}
       />
       <Pagination pagination={pagination} getPageData={refetchProjectDocuments} />
     </div>

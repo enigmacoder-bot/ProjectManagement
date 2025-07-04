@@ -128,7 +128,7 @@ const EditDocumentFormModal = ({ onClose, onSubmit, documentData }) => {
   };
 
   return (
-    <div className="fixed inset-0 flex justify-center items-center bg-black/45 backdrop-blur-sm z-50">
+    <div className="fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm z-50">
       <div className="bg-white p-6 rounded-lg shadow-lg w-[60%] max-h-[90vh] flex flex-col">
         <div className="mb-4 border-b pb-4">
           <div className="flex justify-between items-center">

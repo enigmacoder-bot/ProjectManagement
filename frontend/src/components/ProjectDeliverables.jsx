@@ -72,7 +72,7 @@ const DeliveryCompletionModal = ({ onClose, deliverable, projectId, onSuccessful
   };
 
   return (
-    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex justify-center items-center">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center">
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Delivery Completion</h2>
@@ -199,7 +199,7 @@ const DeliveryInvoiceModal = ({ onClose, deliverable, onSuccessfulSubmit, projec
   };
 
   return (
-    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex justify-center items-center">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center">
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Delivery Invoice</h2>
@@ -281,7 +281,7 @@ const DeliveryInvoiceModal = ({ onClose, deliverable, onSuccessfulSubmit, projec
 };
 
 const ViewDeliverableDetailsModal = ({ onClose, deliverable }) => (
-  <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex justify-center items-center">
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center">
     <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg mx-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">View Deliverable Details</h2>
@@ -401,7 +401,7 @@ const DeliverableDetailsModal = ({ onClose, deliverable, projectId }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex justify-center items-center">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center">
       <form onSubmit={handleScopeSubmit} className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Upload Scope Evidence</h2>
@@ -440,7 +440,7 @@ const DeliverableDetailsModal = ({ onClose, deliverable, projectId }) => {
 };
 
 const ChangeRequestModal = ({ onClose, deliverable }) => (
-  <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex justify-center items-center">
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center">
     <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">Apply for Change Request</h2>
@@ -460,7 +460,7 @@ const ChangeRequestModal = ({ onClose, deliverable }) => (
 );
 
 const ChangeDatesModal = ({ onClose, deliverable }) => (
-  <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex justify-center items-center">
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center">
     <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">Change Deliverable Dates</h2>

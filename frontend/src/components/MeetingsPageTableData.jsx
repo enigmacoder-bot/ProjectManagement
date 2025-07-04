@@ -6,10 +6,6 @@ import {
   ChevronDown,
   ChevronsUpDown,
   ExternalLink,
-  Eye,
-  FileText,
-  Calendar,
-  Download
 } from "lucide-react";
 import UserAccordion from "./UserAccordion";
 import BoqTaskAccordion from "../components/BoqTaskAccordion";
@@ -25,18 +21,13 @@ import ProjectAccordion from "./ProjectAccordion";
 import DepartmentAccordion from "./DepartmentAccordion";
 import ObjectiveAccordion from "./ObjectiveAccordion";
 import BoqTaskApprovalAccordion from "./BoqTaskApprovalAccordion";
-import DeliverableInvoiceApprovalAccordion from "./DeliverableInvoiceApprovalAccordion";
-import DeliverableCompletionApprovalAccordion from "./DeliverableCompletionApprovalAccordion";
 import axiosInstance from "../axiosInstance";
 import { toast } from "sonner";
 import Loader from "./Loader";
 import UpdateProjectModal from "./UpdateProjectModal";
 import DocumentTemplateAccordion from "./DocumentTemplateAccordion";
-import ProjectDocumentsModal from "./ProjectDocumentsModal";
-import ProjectSchedulePlanModal from "./ProjectSchedulePlanModal";
 import useAuthStore from "../store/authStore";
 import EditDocumentFormModal from "./EditDocumentFormModal"; // Import the new modal
-import { getViewableDocumentUrl, getDownloadableDocumentUrl } from "../utils/supabaseUtils";
 
 const TableData = ({
   getData,
@@ -44,7 +35,6 @@ const TableData = ({
   tableName,
   setTableData,
   showDate,
-  showActionButtons = true,
   sortTableData,
   columnSetting,
 }) => {
@@ -63,12 +53,6 @@ const TableData = ({
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [isEditDocumentModalOpen, setIsEditDocumentModalOpen] = useState(false);
-  
-  // New modal states for project documents and schedule plan
-  const [isProjectDocumentsModalOpen, setIsProjectDocumentsModalOpen] = useState(false);
-  const [isProjectSchedulePlanModalOpen, setIsProjectSchedulePlanModalOpen] = useState(false);
-  const [selectedProjectForAction, setSelectedProjectForAction] = useState(null);
-  
   const { userId, role } = useAuthStore();
 
   // Initialize column widths and visible columns
@@ -182,37 +166,7 @@ const TableData = ({
   const handleFormData = async (formData) => {
     console.log(formData);
     const { id, ...updatedData } = formData;
-    console.log(updatedData);
     toggleForm(-1);
-    if(tableName == 'risks'){
-      try{
-        const response =await  axiosInstance.patch(`/project-card/risk`,{
-          id,updatedData
-        })
-        console.log(response);
-        if(response.status == 200)
-        {
-          console.log("status is 200");
-          console.log(updatedData);
-          console.log(tableData);
-          setTableData((prevData) =>
-            prevData.map((item) =>
-              item.id === id ? { ...item, name :updatedData.caseName , comments:updatedData.responsePlan , status:updatedData.status ,  } : item
-            )
-          );
-          toast.success("Record updated successfully");
-        }
-      }
-      catch(e)
-      {
-        console.log("there was an error in updating the risks");
-        console.log(e);
-      }
-      finally
-      {
-        return;
-      }
-    }
     try {
       const result = await axiosInstance.post(
         `/data-management/update${tableName}`,
@@ -238,20 +192,10 @@ const TableData = ({
 
   const handleDeleteClick = async (id) => {
     try {
-      console.log("the tableName is"+tableName);
-      if(tableName === 'risks')
-      {
-        const result = await axiosInstance.delete(`/project-card/risk/${id}`);
-        console.log("the result of deleting risk"),
-        console.log(result);
-      }
-      else
-      {
-          const result = await axiosInstance.post(
-          `/data-management/delete${tableName}`,
-          { id }
-        );
-      } 
+      const result = await axiosInstance.post(
+        `/data-management/delete${tableName}`,
+        { id }
+      );
       setTableData((prevData) => prevData.filter((e) => e.id !== id));
       toast.success("Record deleted successfully");
     } catch (e) {
@@ -355,27 +299,6 @@ const TableData = ({
     );
     setIsEditDocumentModalOpen(false);
     setSelectedDocument(null);
-  };
-
-  // New handlers for project documents and schedule plan modals
-  const handleOpenProjectDocumentsModal = (project) => {
-    setSelectedProjectForAction(project);
-    setIsProjectDocumentsModalOpen(true);
-  };
-
-  const handleOpenProjectSchedulePlanModal = (project) => {
-    setSelectedProjectForAction(project);
-    setIsProjectSchedulePlanModalOpen(true);
-  };
-
-  const handleCloseProjectDocumentsModal = () => {
-    setIsProjectDocumentsModalOpen(false);
-    setSelectedProjectForAction(null);
-  };
-
-  const handleCloseProjectSchedulePlanModal = () => {
-    setIsProjectSchedulePlanModalOpen(false);
-    setSelectedProjectForAction(null);
   };
 
   return (
@@ -512,7 +435,7 @@ const TableData = ({
                                   column.dbColumn === "status"
                                     ? item[column.dbColumn] === "Delayed"
                                       ? "text-red-600 dark:text-red-400 bg-red-50"
-                                      : item[column.dbColumn] === "Open".toLowerCase()
+                                      : item[column.dbColumn] === "Open"
                                       ? "text-yellow-600 bg-yellow-50 dark:text-yellow-400"
                                       : "text-green-600 bg-green-50 dark:text-green-400"
                                     : "dark:text-white"
@@ -536,60 +459,6 @@ const TableData = ({
                             <ExternalLink className="w-6 h-5" />
                           </a>
                         )}
-                        {tableName === "ProjectDocuments" && (
-                          <a
-                            href={`${item.document_url}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline cursor-pointer"
-                          >
-                            <ExternalLink className="w-6 h-5" />
-                          </a>
-                        )}
-                        {tableName === "ProjectDocuments" && (
-                          <div className="flex items-center gap-2">
-                            {item.effective_file_url ? (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    const fileUrl = item.effective_file_url;
-                                    if (!fileUrl) {
-                                      toast.error("No document URL available.");
-                                      return;
-                                    }
-                                    
-                                    const viewUrl = getViewableDocumentUrl(fileUrl);
-                                    console.log('Opening document URL:', viewUrl);
-                                    window.open(viewUrl, '_blank');
-                                  }}
-                                  className="text-green-500 hover:text-green-700 transition-colors"
-                                  title="View document"
-                                >
-                                  <Eye className="w-5 h-5" />
-                                </button>
-                                <a 
-                                  href={getDownloadableDocumentUrl(item.effective_file_url)}
-                                  download={item.document_name}
-                                  className="text-blue-500 hover:text-blue-700 transition-colors"
-                                  title="Download document"
-                                  onClick={(e) => {
-                                    if (!item.effective_file_url) {
-                                      e.preventDefault();
-                                      toast.error("No document URL available.");
-                                      return;
-                                    }
-                                    console.log('Download URL:', getDownloadableDocumentUrl(item.effective_file_url));
-                                  }}
-                                >
-                                  <Download className="w-5 h-5" />
-                                </a>
-                              </>
-                            ) : (
-                              <span className="text-gray-400 text-xs italic">No file uploaded</span>
-                            )}
-                          </div>
-                        )}
-
                         {/* {tableName === "document" && (
                           <button
                             onClick={() => toggleForm(index)}
@@ -597,50 +466,24 @@ const TableData = ({
                           >
                             <Edit className="w-5 h-5" />
                           </button>
-                        } */}
-
-                        {showActionButtons && tableName !== "tasks" && tableName !== "document" && tableName !== "ProjectDocuments" && (
+                        )} */}
+                        {tableName !== "tasks" && tableName !== "document" && (
                           <button
                             onClick={() => toggleForm(index)}
                             className="text-blue-500 hover:text-blue-700"
-                            title="Edit Project"
                           >
                             <Edit className="w-5 h-5" />
                           </button>
                         )}
-                        
-                        {/* New buttons for project documents and schedule plan */}
-                        {showActionButtons && tableName === "project" && (
-                          <button
-                            onClick={() => handleOpenProjectDocumentsModal(item)}
-                            className="text-green-500 hover:text-green-700"
-                            title="Manage Project Documents"
-                          >
-                            <FileText className="w-5 h-5" />
-                          </button>
-                        )}
-                        
-                        {showActionButtons && tableName === "project" && (
-                          <button
-                            onClick={() => handleOpenProjectSchedulePlanModal(item)}
-                            className="text-purple-500 hover:text-purple-700"
-                            title="Manage Schedule Plan"
-                          >
-                            <Calendar className="w-5 h-5" />
-                          </button>
-                        )}
-                        
-                        {showActionButtons && tableName !== "tasks" && tableName !== "ProjectDocuments" && (
+                        {tableName !== "tasks" && (
                           <button
                             onClick={() => handleDeleteClick(item.id)}
                             className="text-red-500 hover:text-red-700"
-                            title="Delete"
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>
                         )}
-                        {showActionButtons &&
-                          <button
+                        <button
                           onClick={() => toggleAccordion(index)}
                           className="text-gray-500 hover:text-gray-700"
                         >
@@ -650,8 +493,6 @@ const TableData = ({
                             }`}
                           />
                         </button>
-                        }
-                        
                       </div>
                     </td>
                   </tr>
@@ -689,17 +530,6 @@ const TableData = ({
                               projectBudget={
                                 tableData[index]?.approved_project_budget
                               }
-                              closeAccordion={closeAccordion}
-                            />                          )}
-                          {(item.title === "Approve Uploaded Invoice" || item.title.startsWith("Approve Uploaded Invoice -")) && (
-                            <DeliverableInvoiceApprovalAccordion
-                              task={tableData[index]}
-                              closeAccordion={closeAccordion}
-                            />
-                          )}
-                          {item.title === "Approve Deliverable Completion" && (
-                            <DeliverableCompletionApprovalAccordion
-                              task={tableData[index]}
                               closeAccordion={closeAccordion}
                             />
                           )}
@@ -869,34 +699,6 @@ const TableData = ({
             onClose={() => setIsEditDocumentModalOpen(false)}
             documentData={selectedDocument}
             onSubmit={handleUpdateDocument}
-          />
-        </div>
-      )}
-
-      {/* Project Documents Modal */}
-      {isProjectDocumentsModalOpen && (
-        <div className="fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm z-50">
-          <ProjectDocumentsModal
-            isOpen={isProjectDocumentsModalOpen}
-            onClose={handleCloseProjectDocumentsModal}
-            projectId={selectedProjectForAction?.id}
-            projectName={selectedProjectForAction?.name}
-            currentPhase={selectedProjectForAction?.current_phase_id}
-            isNewProject={false} // This is an existing project
-          />
-        </div>
-      )}
-
-      {/* Project Schedule Plan Modal */}
-      {isProjectSchedulePlanModalOpen && (
-        <div className="fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm z-50">
-          <ProjectSchedulePlanModal
-            isOpen={isProjectSchedulePlanModalOpen}
-            onClose={handleCloseProjectSchedulePlanModal}
-            projectId={selectedProjectForAction?.id}
-            projectName={selectedProjectForAction?.name}
-            projectType={selectedProjectForAction?.project_type_id}
-            projectBudget={selectedProjectForAction?.project_budget}
           />
         </div>
       )}

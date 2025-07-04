@@ -6,6 +6,10 @@ const { testDatabaseConnection } = require("./middlewares/databaseHealth");
 const cronJob = require("./services/cronJob");
 const multer = require("multer");
 
+// Configure multer with memory storage
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
 // Validate environment and database connection on startup
 async function validateStartup() {
   console.log("🚀 Starting Project Management Server...");
@@ -30,8 +34,6 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-const upload = multer();
 
 app.use("/auth", require("./routes/authRoute"));
 app.use("/admin", require("./routes/adminRoute"));

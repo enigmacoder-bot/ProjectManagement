@@ -28,9 +28,60 @@ const addProjectDocument = async (req, res) => {
 
   try {
     // Upload the file to Supabase storage
+    // Determine content type based on file extension
+    const fileExtension = file.originalname.split('.').pop().toLowerCase();
+    let contentType = 'application/octet-stream'; // Default content type
+    
+    // Set content type based on common file extensions
+    if (fileExtension === 'pdf') {
+      contentType = 'application/pdf';
+    } else if (['doc', 'docx'].includes(fileExtension)) {
+      contentType = 'application/msword';
+    } else if (['xls', 'xlsx'].includes(fileExtension)) {
+      contentType = 'application/vnd.ms-excel';
+    } else if (['jpg', 'jpeg'].includes(fileExtension)) {
+      contentType = 'image/jpeg';
+    } else if (fileExtension === 'png') {
+      contentType = 'image/png';
+    }
+    
+    // Check if we have a valid buffer
+    if (!file.buffer || !(file.buffer instanceof Buffer)) {
+      console.error("Invalid file buffer:", typeof file.buffer);
+      return res.status(400).json({
+        status: "failure",
+        message: "Invalid file format or corrupt file",
+      });
+    }
+    
+    // Log file details for debugging
+    console.log("File details:", {
+      name: file.originalname,
+      size: file.buffer.length,
+      mimeType: contentType,
+      extension: fileExtension
+    });
+    
+    // Special handling for PDFs to ensure proper binary storage
+    const uploadOptions = {
+      contentType: contentType,
+      upsert: true // Replace if exists
+    };
+
+    // For PDFs, explicitly set additional options to ensure proper binary storage
+    if (fileExtension === 'pdf') {
+      uploadOptions.cacheControl = '3600';
+      uploadOptions.contentType = 'application/pdf'; // Force content type again
+      console.log("Using special PDF handling with options:", uploadOptions);
+    }
+    
+    // Create a unique filename with timestamp to avoid caching issues with same filename
+    const timestamp = Date.now();
+    const uniqueFilename = `${timestamp}-${file.originalname}`;
+    
     const { data, error } = await supabase.storage
       .from("project-documents")
-      .upload(`projects/${project_id}/${file.originalname}`, file.buffer);
+      .upload(`projects/${project_id}/${uniqueFilename}`, file.buffer, uploadOptions);
 
     console.log("Supabase upload response:", { data, error }); // Log the response
 
@@ -48,9 +99,9 @@ const addProjectDocument = async (req, res) => {
       project_id,
       template_id,
       phase,
-      file_url: data.fullPath, // Use fullPath or data.path for the file URL
+      file_url: data.path, // Use path instead of fullPath to get relative path
       uploaded_at: new Date(),
-      document_name: file.originalname, // Use document_name instead of original_name
+      document_name: file.originalname, // Keep the original filename for display
     };
 
     console.log("Document data to be inserted:", documentData); // Log document data
@@ -122,12 +173,13 @@ const getProjectDocuments = async (req, res) => {
 
     const result = await sql.unsafe(queryText, [project_id]);
 
-    // Check if any documents were found
+    // Even if no documents are found, return an empty array instead of an error
+    // This way the frontend can handle new projects where no documents exist yet
     if (!result || result.length === 0) {
-      return res.status(404).json({
-        status: "failure",
+      return res.status(200).json({
+        status: "success",
         message: `No documents found for project with id ${project_id}`,
-        result: null,
+        result: [], // Return empty array instead of null
       });
     }
 
@@ -227,3 +279,4 @@ module.exports = {
   getProjectDocuments,
   deleteProjectDocument,
 };
+
