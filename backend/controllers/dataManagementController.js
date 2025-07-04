@@ -69,6 +69,7 @@ const getData = async (req, res) => {
         SELECT ${sql(tableName)}.*, users.first_name AS project_manager_name
         FROM ${sql(tableName)}
         LEFT JOIN users ON ${sql(tableName)}.project_manager_id = users.id
+        ORDER BY ${sql(tableName)}.created_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
     } else {
@@ -108,676 +109,6 @@ const getData = async (req, res) => {
 
 // @Description retrieve filtered Table data (sorting, ordering, filtering table records)
 // @Route site.com/data-management/filtereddata
-// const getFilteredData = async (req, res) => {
-//   let {
-//     tableName,
-//     filters = {}, // Default to empty object if not provided
-//     page = 1,
-//     limit = 7, // Updated to match your query log (LIMIT 7)
-//     sort = {}, // Default to empty object if not provided
-//     dateFilter,
-//     customDateRangeOption,
-//   } = req.body;
-//   console.log("the filters applied are");
-//   console.log(filters);
-//   if (!tableName) {
-//     return res.status(400).json({
-//       status: "failure",
-//       message: "Required field missing: tableName",
-//       result: null,
-//     });
-//   }
-//   if (tableName === "user") {
-//     tableName = "users";
-//   }
-//   if (tableName === "document") {
-//     tableName = "document_template";
-//   }
-
-//   try {
-//     // Validate table name to prevent SQL injection
-//     if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
-//       return res.status(400).json({
-//         status: "failure",
-//         message: "Invalid table name",
-//         result: null,
-//       });
-//     }
-
-//     // Build where conditions
-//     let whereConditions = [];
-//     let queryParams = [];
-
-//     // Handle search term separately
-//     if (filters.searchTerm && filters.searchTerm.trim() !== "") {
-//       whereConditions.push(`"name" ILIKE $${whereConditions.length + 1}`);
-//       queryParams.push(`%${filters.searchTerm}%`);
-//     }
-
-//     // Handle other filters
-//     Object.entries(filters).forEach(([column, value]) => {
-//       if (
-//         column !== "searchTerm" &&
-//         value &&
-//         typeof value === "string" &&
-//         value.trim() !== "" &&
-//         /^[a-zA-Z0-9_]+$/.test(column) // Validate column name
-//       ) {
-//         whereConditions.push(`"${column}" = $${whereConditions.length + 1}`);
-//         queryParams.push(value);
-//       }
-//     });
-//     console.log("the tablename is " + tableName);
-//     // Handle date filtering
-//     // Handle date filtering
-//     if (dateFilter) {
-//       const dateColumn =
-//         tableName === "initiative" ? "created_at" : "created_date";
-
-//       // Helper function to format dates as YYYY-MM-DD
-//       const formatDate = (date) =>
-//         [
-//           date.getFullYear(),
-//           String(date.getMonth() + 1).padStart(2, "0"),
-//           String(date.getDate()).padStart(2, "0"),
-//         ].join("-");
-
-//       const today = new Date();
-
-//       switch (dateFilter) {
-//         case "Today":
-//           const todayDateStr = formatDate(today);
-//           whereConditions.push(
-//             `"${dateColumn}" = $${whereConditions.length + 1}`
-//           );
-//           queryParams.push(todayDateStr);
-//           break;
-
-//         case "thisWeek":
-//           const startOfWeek = new Date(today);
-//           const dayOfWeek = startOfWeek.getDay();
-//           const diff = dayOfWeek <= 1 ? dayOfWeek + 6 : dayOfWeek - 1;
-//           startOfWeek.setDate(today.getDate() - diff);
-//           const endOfWeek = new Date(startOfWeek);
-//           endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-//           whereConditions.push(
-//             `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
-//               whereConditions.length + 2
-//             }`
-//           );
-//           queryParams.push(formatDate(startOfWeek), formatDate(endOfWeek));
-//           break;
-
-//         case "This Month":
-//           const startOfMonth = new Date(
-//             today.getFullYear(),
-//             today.getMonth(),
-//             1
-//           );
-//           const endOfMonth = new Date(
-//             today.getFullYear(),
-//             today.getMonth() + 1,
-//             0
-//           );
-
-//           whereConditions.push(
-//             `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
-//               whereConditions.length + 2
-//             }`
-//           );
-//           queryParams.push(formatDate(startOfMonth), formatDate(endOfMonth));
-//           break;
-
-//         case "last2months":
-//           const startOfTwoMonthsAgo = new Date(
-//             today.getFullYear(),
-//             today.getMonth() - 1,
-//             1
-//           );
-//           const endOfCurrentMonth = new Date(
-//             today.getFullYear(),
-//             today.getMonth() + 1,
-//             0
-//           );
-
-//           whereConditions.push(
-//             `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
-//               whereConditions.length + 2
-//             }`
-//           );
-//           queryParams.push(
-//             formatDate(startOfTwoMonthsAgo),
-//             formatDate(endOfCurrentMonth)
-//           );
-//           break;
-
-//         case "Last 3 Months":
-//           const startOfThreeMonthsAgo = new Date(
-//             today.getFullYear(),
-//             today.getMonth() - 2,
-//             1
-//           );
-//           const endOfCurrentMonthForThree = new Date(
-//             today.getFullYear(),
-//             today.getMonth() + 1,
-//             0
-//           );
-
-//           whereConditions.push(
-//             `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
-//               whereConditions.length + 2
-//             }`
-//           );
-//           queryParams.push(
-//             formatDate(startOfThreeMonthsAgo),
-//             formatDate(endOfCurrentMonthForThree)
-//           );
-//           break;
-
-//         case "custom":
-//           if (!customDateRangeOption?.start || !customDateRangeOption?.end) {
-//             return res.status(400).json({
-//               status: "failure",
-//               message: "Missing custom date range parameters",
-//               result: null,
-//             });
-//           }
-
-//           const startDateStr = customDateRangeOption.start;
-//           const endDateStr = customDateRangeOption.end;
-
-//           // Validate date format
-//           if (
-//             !/^\d{4}-\d{2}-\d{2}$/.test(startDateStr) ||
-//             !/^\d{4}-\d{2}-\d{2}$/.test(endDateStr)
-//           ) {
-//             return res.status(400).json({
-//               status: "failure",
-//               message: "Invalid date format. Use YYYY-MM-DD",
-//               result: null,
-//             });
-//           }
-
-//           whereConditions.push(
-//             `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
-//               whereConditions.length + 2
-//             }`
-//           );
-//           queryParams.push(startDateStr, endDateStr);
-//           break;
-
-//         case "all":
-//         default:
-//           break;
-//       }
-//     }
-
-//     // Pagination
-//     const offset = (page - 1) * limit;
-
-//     // Sorting - Enhanced validation
-//     let orderByClause = "";
-//     if (sort && typeof sort === "object" && Object.keys(sort).length > 0) {
-//       const validDirections = ["ASC", "DESC", "asc", "desc"];
-//       const sortParts = [];
-
-//       Object.entries(sort).forEach(([column, direction]) => {
-//         // Ensure column is defined and valid, and direction is valid
-//         if (
-//           column &&
-//           column !== "undefined" &&
-//           /^[a-zA-Z0-9_]+$/.test(column) &&
-//           direction &&
-//           direction !== "undefined" &&
-//           validDirections.includes(String(direction).toUpperCase())
-//         ) {
-//           sortParts.push(`"${column}" ${String(direction).toUpperCase()}`);
-//         } else {
-//           console.warn(
-//             `Invalid sort parameter: column=${column}, direction=${direction}`
-//           );
-//         }
-//       });
-
-//       if (sortParts.length > 0) {
-//         orderByClause = `ORDER BY ${sortParts.join(", ")}`;
-//       } else {
-//         console.log("No valid sort parameters provided; skipping ORDER BY");
-//       }
-//     } else {
-//       console.log("Sort parameter is empty or invalid; skipping ORDER BY");
-//     }
-
-//     // Build the base query
-//     let queryText = `SELECT * FROM "${tableName}"`;
-
-//     // Add WHERE clause if we have conditions
-//     if (whereConditions.length > 0) {
-//       queryText += ` WHERE ${whereConditions.join(" AND ")}`;
-//     }
-
-//     // Add ORDER BY
-//     if (orderByClause) {
-//       queryText += ` ${orderByClause}`;
-//     }
-
-//     // Add LIMIT and OFFSET
-//     queryText += ` LIMIT $${queryParams.length + 1} OFFSET $${
-//       queryParams.length + 2
-//     }`;
-//     queryParams.push(limit, offset);
-
-//     console.log("Generated Query:", queryText);
-//     console.log("Query Parameters:", queryParams);
-
-//     // Execute the query
-//     const result = await sql.unsafe(queryText, queryParams);
-
-//     // Get total count for pagination
-//     let countQueryText = `SELECT COUNT(*) FROM "${tableName}"`;
-//     if (whereConditions.length > 0) {
-//       countQueryText += ` WHERE ${whereConditions.join(" AND ")}`;
-//     }
-//     const countQueryParams = queryParams.slice(0, -2);
-//     const countResult = await sql.unsafe(countQueryText, countQueryParams);
-//     const totalCount = parseInt(countResult[0].count);
-
-//     res.status(200).json({
-//       status: "success",
-//       message: "",
-//       result,
-//       pagination: {
-//         total: totalCount,
-//         page,
-//         limit,
-//         totalPages: Math.ceil(totalCount / limit),
-//       },
-//     });
-//   } catch (e) {
-//     console.error("Error in getFilteredData:", e);
-//     res.status(500).json({
-//       status: "failure",
-//       message: "Error in retrieving filtered data",
-//       result: e.message,
-//     });
-//   }
-// };
-
-// @Description retrieve filtered Table data (sorting, ordering, filtering table records)
-// @Route site.com/data-management/filtereddata
-// new one which has handling of getting join data
-// const getFilteredData = async (req, res) => {
-//   let {
-//     tableName,
-//     filters = {}, // Default to empty object if not provided
-//     page = 1,
-//     limit = 7, // Updated to match your query log (LIMIT 7)
-//     sort = {}, // Default to empty object if not provided
-//     dateFilter,
-//     customDateRangeOption,
-//   } = req.body;
-//   console.log("the filters applied are");
-//   console.log(filters);
-//   if (!tableName) {
-//     return res.status(400).json({
-//       status: "failure",
-//       message: "Required field missing: tableName",
-//       result: null,
-//     });
-//   }
-//   if (tableName === "user") {
-//     tableName = "users";
-//   }
-//   if (tableName === "document") {
-//     tableName = "document_template";
-//   }
-
-//   try {
-//     // Validate table name to prevent SQL injection
-//     if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
-//       return res.status(400).json({
-//         status: "failure",
-//         message: "Invalid table name",
-//         result: null,
-//       });
-//     }
-
-//     // Build where conditions
-//     let whereConditions = [];
-//     let queryParams = [];
-
-//     // Handle search term separately
-//     if (filters.searchTerm && filters.searchTerm.trim() !== "") {
-//       whereConditions.push(
-//         `"${tableName}"."name" ILIKE $${whereConditions.length + 1}`
-//       );
-//       queryParams.push(`%${filters.searchTerm}%`);
-//     }
-
-//     // Handle other filters
-//     Object.entries(filters).forEach(([column, value]) => {
-//       if (
-//         column !== "searchTerm" &&
-//         value &&
-//         typeof value === "string" &&
-//         value.trim() !== "" &&
-//         /^[a-zA-Z0-9_]+$/.test(column) // Validate column name
-//       ) {
-//         whereConditions.push(
-//           `"${tableName}"."${column}" = $${whereConditions.length + 1}`
-//         );
-//         queryParams.push(value);
-//       }
-//     });
-//     console.log("the tablename is " + tableName);
-
-//     // Handle date filtering
-//     if (dateFilter) {
-//       const dateColumn =
-//         tableName === "initiative" ? "created_at" : "created_date";
-
-//       // Helper function to format dates as YYYY-MM-DD
-//       const formatDate = (date) =>
-//         [
-//           date.getFullYear(),
-//           String(date.getMonth() + 1).padStart(2, "0"),
-//           String(date.getDate()).padStart(2, "0"),
-//         ].join("-");
-
-//       const today = new Date();
-
-//       switch (dateFilter) {
-//         case "Today":
-//           const todayDateStr = formatDate(today);
-//           whereConditions.push(
-//             `"${tableName}"."${dateColumn}" = $${whereConditions.length + 1}`
-//           );
-//           queryParams.push(todayDateStr);
-//           break;
-
-//         case "thisWeek":
-//           const startOfWeek = new Date(today);
-//           const dayOfWeek = startOfWeek.getDay();
-//           const diff = dayOfWeek <= 1 ? dayOfWeek + 6 : dayOfWeek - 1;
-//           startOfWeek.setDate(today.getDate() - diff);
-//           const endOfWeek = new Date(startOfWeek);
-//           endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-//           whereConditions.push(
-//             `"${tableName}"."${dateColumn}" BETWEEN $${
-//               whereConditions.length + 1
-//             } AND $${whereConditions.length + 2}`
-//           );
-//           queryParams.push(formatDate(startOfWeek), formatDate(endOfWeek));
-//           break;
-
-//         case "This Month":
-//           const startOfMonth = new Date(
-//             today.getFullYear(),
-//             today.getMonth(),
-//             1
-//           );
-//           const endOfMonth = new Date(
-//             today.getFullYear(),
-//             today.getMonth() + 1,
-//             0
-//           );
-
-//           whereConditions.push(
-//             `"${tableName}"."${dateColumn}" BETWEEN $${
-//               whereConditions.length + 1
-//             } AND $${whereConditions.length + 2}`
-//           );
-//           queryParams.push(formatDate(startOfMonth), formatDate(endOfMonth));
-//           break;
-
-//         case "last2months":
-//           const startOfTwoMonthsAgo = new Date(
-//             today.getFullYear(),
-//             today.getMonth() - 1,
-//             1
-//           );
-//           const endOfCurrentMonth = new Date(
-//             today.getFullYear(),
-//             today.getMonth() + 1,
-//             0
-//           );
-
-//           whereConditions.push(
-//             `"${tableName}"."${dateColumn}" BETWEEN $${
-//               whereConditions.length + 1
-//             } AND $${whereConditions.length + 2}`
-//           );
-//           queryParams.push(
-//             formatDate(startOfTwoMonthsAgo),
-//             formatDate(endOfCurrentMonth)
-//           );
-//           break;
-
-//         case "Last 3 Months":
-//           const startOfThreeMonthsAgo = new Date(
-//             today.getFullYear(),
-//             today.getMonth() - 2,
-//             1
-//           );
-//           const endOfCurrentMonthForThree = new Date(
-//             today.getFullYear(),
-//             today.getMonth() + 1,
-//             0
-//           );
-
-//           whereConditions.push(
-//             `"${tableName}"."${dateColumn}" BETWEEN $${
-//               whereConditions.length + 1
-//             } AND $${whereConditions.length + 2}`
-//           );
-//           queryParams.push(
-//             formatDate(startOfThreeMonthsAgo),
-//             formatDate(endOfCurrentMonthForThree)
-//           );
-//           break;
-
-//         case "custom":
-//           if (!customDateRangeOption?.start || !customDateRangeOption?.end) {
-//             return res.status(400).json({
-//               status: "failure",
-//               message: "Missing custom date range parameters",
-//               result: null,
-//             });
-//           }
-
-//           const startDateStr = customDateRangeOption.start;
-//           const endDateStr = customDateRangeOption.end;
-
-//           // Validate date format
-//           if (
-//             !/^\d{4}-\d{2}-\d{2}$/.test(startDateStr) ||
-//             !/^\d{4}-\d{2}-\d{2}$/.test(endDateStr)
-//           ) {
-//             return res.status(400).json({
-//               status: "failure",
-//               message: "Invalid date format. Use YYYY-MM-DD",
-//               result: null,
-//             });
-//           }
-
-//           whereConditions.push(
-//             `"${tableName}"."${dateColumn}" BETWEEN $${
-//               whereConditions.length + 1
-//             } AND $${whereConditions.length + 2}`
-//           );
-//           queryParams.push(startDateStr, endDateStr);
-//           break;
-
-//         case "all":
-//         default:
-//           break;
-//       }
-//     }
-
-//     // Pagination
-//     const offset = (page - 1) * limit;
-
-//     // Sorting - Enhanced validation
-//     let orderByClause = "";
-//     if (sort && typeof sort === "object" && Object.keys(sort).length > 0) {
-//       const validDirections = ["ASC", "DESC", "asc", "desc"];
-//       const sortParts = [];
-
-//       Object.entries(sort).forEach(([column, direction]) => {
-//         // Ensure column is defined and valid, and direction is valid
-//         if (
-//           column &&
-//           column !== "undefined" &&
-//           /^[a-zA-Z0-9_]+$/.test(column) &&
-//           direction &&
-//           direction !== "undefined" &&
-//           validDirections.includes(String(direction).toUpperCase())
-//         ) {
-//           sortParts.push(
-//             `"${tableName}"."${column}" ${String(direction).toUpperCase()}`
-//           );
-//         } else {
-//           console.warn(
-//             `Invalid sort parameter: column=${column}, direction=${direction}`
-//           );
-//         }
-//       });
-
-//       if (sortParts.length > 0) {
-//         orderByClause = `ORDER BY ${sortParts.join(", ")}`;
-//       } else {
-//         console.log("No valid sort parameters provided; skipping ORDER BY");
-//       }
-//     } else {
-//       console.log("Sort parameter is empty or invalid; skipping ORDER BY");
-//     }
-
-//     // Build the base query with joins for specific tables
-//     let queryText = "";
-//     let countQueryText = "";
-
-//     if (tableName === "users") {
-//       queryText = `
-//         SELECT users.*
-//         FROM users
-//         JOIN role ON users.role_id = role.id
-//       `;
-//       // Add WHERE conditions specific to users
-//       whereConditions.push(
-//         `LOWER(role.name) NOT IN ('deputy', 'admin', 'pmo')`
-//       );
-
-//       countQueryText = `
-//         SELECT COUNT(*)
-//         FROM users
-//         JOIN role ON users.role_id = role.id
-//       `;
-//     } else if (tableName === "portfolio") {
-//       queryText = `
-//         SELECT ${tableName}.*, users.first_name AS portfolio_manager_name
-//         FROM ${tableName}
-//         LEFT JOIN users ON ${tableName}.portfolio_manager = users.id
-//       `;
-
-//       countQueryText = `
-//         SELECT COUNT(*)
-//         FROM ${tableName}
-//       `;
-//     } else if (tableName === "program") {
-//       queryText = `
-//         SELECT ${tableName}.*, users.first_name AS program_manager_name
-//         FROM ${tableName}
-//         LEFT JOIN users ON ${tableName}.program_manager = users.id
-//       `;
-
-//       countQueryText = `
-//         SELECT COUNT(*)
-//         FROM ${tableName}
-//       `;
-//     } else if (tableName === "objective") {
-//       queryText = `
-//         SELECT ${tableName}.*, project.name AS belongs_to
-//         FROM ${tableName}
-//         LEFT JOIN project ON ${tableName}.project_id = project.id
-//       `;
-
-//       countQueryText = `
-//         SELECT COUNT(*)
-//         FROM ${tableName}
-//       `;
-//     } else if (tableName === "project") {
-//       queryText = `
-//         SELECT ${tableName}.*, users.first_name AS project_manager_name
-//         FROM ${tableName}
-//         LEFT JOIN users ON ${tableName}.project_manager_id = users.id
-//       `;
-
-//       countQueryText = `
-//         SELECT COUNT(*)
-//         FROM ${tableName}
-//       `;
-//     } else {
-//       queryText = `SELECT * FROM "${tableName}"`;
-//       countQueryText = `SELECT COUNT(*) FROM "${tableName}"`;
-//     }
-
-//     // Add WHERE clause if we have conditions
-//     if (whereConditions.length > 0) {
-//       queryText += ` WHERE ${whereConditions.join(" AND ")}`;
-//       countQueryText += ` WHERE ${whereConditions.join(" AND ")}`;
-//     }
-
-//     // Add ORDER BY
-//     if (orderByClause) {
-//       queryText += ` ${orderByClause}`;
-//     }
-
-//     // Add LIMIT and OFFSET
-//     queryText += ` LIMIT $${queryParams.length + 1} OFFSET $${
-//       queryParams.length + 2
-//     }`;
-//     queryParams.push(limit, offset);
-
-//     console.log("Generated Query:", queryText);
-//     console.log("Query Parameters:", queryParams);
-
-//     // Execute the query
-//     const result = await sql.unsafe(queryText, queryParams);
-
-//     // Get total count for pagination
-//     const countQueryParams = queryParams.slice(0, -2); // Remove the LIMIT and OFFSET params
-//     const countResult = await sql.unsafe(countQueryText, countQueryParams);
-//     const totalCount = parseInt(countResult[0].count);
-
-//     res.status(200).json({
-//       status: "success",
-//       message: "",
-//       result,
-//       pagination: {
-//         total: totalCount,
-//         page,
-//         limit,
-//         totalPages: Math.ceil(totalCount / limit),
-//       },
-//     });
-//   } catch (e) {
-//     console.error("Error in getFilteredData:", e);
-//     res.status(500).json({
-//       status: "failure",
-//       message: "Error in retrieving filtered data",
-//       result: e.message,
-//     });
-//   }
-// };
-
-// @Description retrieve filtered Table data (sorting, ordering, filtering table records)
-// @Route site.com/data-management/filtereddata
-// @Description retrieve filtered Table data (sorting, ordering, filtering table records)
-// @Route site.com/data-management/filtereddata
-// @Description retrieve filtered Table data (sorting, ordering, filtering table records)
-// @Route site.com/data-management/filtereddata
 const getFilteredData = async (req, res) => {
   let {
     tableName,
@@ -814,57 +145,17 @@ const getFilteredData = async (req, res) => {
       });
     }
 
-    // Define related field mappings for each table type
-    const relatedFieldMappings = {
-      portfolio: {
-        portfolio_manager_name: {
-          table: "users",
-          column: "first_name",
-          joinField: "portfolio_manager",
-        },
-      },
-      program: {
-        program_manager_name: {
-          table: "users",
-          column: "first_name",
-          joinField: "program_manager",
-        },
-      },
-      project: {
-        project_manager_name: {
-          table: "users",
-          column: "first_name",
-          joinField: "project_manager_id",
-        },
-      },
-      objective: {
-        belongs_to: {
-          table: "project",
-          column: "name",
-          joinField: "project_id",
-        },
-      },
-      users: {
-        role_name: { table: "role", column: "name", joinField: "role_id" },
-      },
-    };
-
-    // Get the related field mapping for the current table
-    const mappings = relatedFieldMappings[tableName] || {};
-
     // Build where conditions
     let whereConditions = [];
     let queryParams = [];
 
     // Handle search term separately
     if (filters.searchTerm && filters.searchTerm.trim() !== "") {
-      whereConditions.push(
-        `"${tableName}"."name" ILIKE $${whereConditions.length + 1}`
-      );
+      whereConditions.push(`"name" ILIKE $${whereConditions.length + 1}`);
       queryParams.push(`%${filters.searchTerm}%`);
     }
 
-    // Handle filters - check if they are related fields or direct fields
+    // Handle other filters
     Object.entries(filters).forEach(([column, value]) => {
       if (
         column !== "searchTerm" &&
@@ -873,27 +164,12 @@ const getFilteredData = async (req, res) => {
         value.trim() !== "" &&
         /^[a-zA-Z0-9_]+$/.test(column) // Validate column name
       ) {
-        // Check if this is a related field
-        if (mappings[column]) {
-          const mapping = mappings[column];
-          whereConditions.push(
-            `"${mapping.table}"."${mapping.column}" ILIKE $${
-              whereConditions.length + 1
-            }`
-          );
-          queryParams.push(`%${value}%`);
-        } else {
-          // Direct field on the main table
-          whereConditions.push(
-            `"${tableName}"."${column}" = $${whereConditions.length + 1}`
-          );
-          queryParams.push(value);
-        }
+        whereConditions.push(`"${column}" = $${whereConditions.length + 1}`);
+        queryParams.push(value);
       }
     });
-
     console.log("the tablename is " + tableName);
-
+    
     // Handle date filtering
     if (dateFilter) {
       const dateColumn =
@@ -913,7 +189,7 @@ const getFilteredData = async (req, res) => {
         case "Today":
           const todayDateStr = formatDate(today);
           whereConditions.push(
-            `"${tableName}"."${dateColumn}" = $${whereConditions.length + 1}`
+            `"${dateColumn}" = $${whereConditions.length + 1}`
           );
           queryParams.push(todayDateStr);
           break;
@@ -927,9 +203,9 @@ const getFilteredData = async (req, res) => {
           endOfWeek.setDate(startOfWeek.getDate() + 6);
 
           whereConditions.push(
-            `"${tableName}"."${dateColumn}" BETWEEN $${
-              whereConditions.length + 1
-            } AND $${whereConditions.length + 2}`
+            `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
+              whereConditions.length + 2
+            }`
           );
           queryParams.push(formatDate(startOfWeek), formatDate(endOfWeek));
           break;
@@ -947,9 +223,9 @@ const getFilteredData = async (req, res) => {
           );
 
           whereConditions.push(
-            `"${tableName}"."${dateColumn}" BETWEEN $${
-              whereConditions.length + 1
-            } AND $${whereConditions.length + 2}`
+            `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
+              whereConditions.length + 2
+            }`
           );
           queryParams.push(formatDate(startOfMonth), formatDate(endOfMonth));
           break;
@@ -967,9 +243,9 @@ const getFilteredData = async (req, res) => {
           );
 
           whereConditions.push(
-            `"${tableName}"."${dateColumn}" BETWEEN $${
-              whereConditions.length + 1
-            } AND $${whereConditions.length + 2}`
+            `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
+              whereConditions.length + 2
+            }`
           );
           queryParams.push(
             formatDate(startOfTwoMonthsAgo),
@@ -990,9 +266,9 @@ const getFilteredData = async (req, res) => {
           );
 
           whereConditions.push(
-            `"${tableName}"."${dateColumn}" BETWEEN $${
-              whereConditions.length + 1
-            } AND $${whereConditions.length + 2}`
+            `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
+              whereConditions.length + 2
+            }`
           );
           queryParams.push(
             formatDate(startOfThreeMonthsAgo),
@@ -1025,9 +301,9 @@ const getFilteredData = async (req, res) => {
           }
 
           whereConditions.push(
-            `"${tableName}"."${dateColumn}" BETWEEN $${
-              whereConditions.length + 1
-            } AND $${whereConditions.length + 2}`
+            `"${dateColumn}" BETWEEN $${whereConditions.length + 1} AND $${
+              whereConditions.length + 2
+            }`
           );
           queryParams.push(startDateStr, endDateStr);
           break;
@@ -1057,19 +333,7 @@ const getFilteredData = async (req, res) => {
           direction !== "undefined" &&
           validDirections.includes(String(direction).toUpperCase())
         ) {
-          // Check if this is a related field for sorting
-          if (mappings[column]) {
-            const mapping = mappings[column];
-            sortParts.push(
-              `"${mapping.table}"."${mapping.column}" ${String(
-                direction
-              ).toUpperCase()}`
-            );
-          } else {
-            sortParts.push(
-              `"${tableName}"."${column}" ${String(direction).toUpperCase()}`
-            );
-          }
+          sortParts.push(`"${column}" ${String(direction).toUpperCase()}`);
         } else {
           console.warn(
             `Invalid sort parameter: column=${column}, direction=${direction}`
@@ -1079,151 +343,24 @@ const getFilteredData = async (req, res) => {
 
       if (sortParts.length > 0) {
         orderByClause = `ORDER BY ${sortParts.join(", ")}`;
-      } else {
-        console.log("No valid sort parameters provided; skipping ORDER BY");
-      }
-    } else {
-      console.log("Sort parameter is empty or invalid; skipping ORDER BY");
-    }
-
-    // Build the base query with joins for specific tables
-    let queryText = "";
-    let countQueryText = "";
-
-    // Helper function to ensure all necessary joins are included
-    const ensureJoins = (filters, sort, mappings) => {
-      const joinedTables = new Set();
-
-      // Check filters for joined tables
-      Object.keys(filters).forEach((column) => {
-        if (mappings[column]) {
-          joinedTables.add(mappings[column].table);
-        }
-      });
-
-      // Check sort for joined tables
-      if (sort && typeof sort === "object") {
-        Object.keys(sort).forEach((column) => {
-          if (mappings[column]) {
-            joinedTables.add(mappings[column].table);
-          }
-        });
-      }
-
-      return joinedTables;
-    };
-
-    // Get all tables that need to be joined based on filters and sorting
-    const joinedTables = ensureJoins(filters, sort, mappings);
-
-    if (tableName === "users") {
-      queryText = `
-        SELECT users.*
-        FROM users
-        JOIN role ON users.role_id = role.id
-      `;
-      // Add WHERE conditions specific to users
-      whereConditions.push(
-        `LOWER(role.name) NOT IN ('deputy', 'admin', 'pmo')`
-      );
-
-      countQueryText = `
-        SELECT COUNT(*) 
-        FROM users
-        JOIN role ON users.role_id = role.id
-      `;
-    } else if (tableName === "portfolio") {
-      queryText = `
-        SELECT ${tableName}.*, users.first_name AS portfolio_manager_name
-        FROM ${tableName}
-        LEFT JOIN users ON ${tableName}.portfolio_manager = users.id
-      `;
-
-      countQueryText = `
-        SELECT COUNT(*) 
-        FROM ${tableName}
-      `;
-
-      // Add necessary joins for count query if filtering by joined fields
-      if (joinedTables.has("users")) {
-        countQueryText = `
-          SELECT COUNT(*) 
-          FROM ${tableName}
-          LEFT JOIN users ON ${tableName}.portfolio_manager = users.id
-        `;
-      }
-    } else if (tableName === "program") {
-      queryText = `
-        SELECT ${tableName}.*, users.first_name AS program_manager_name
-        FROM ${tableName}
-        LEFT JOIN users ON ${tableName}.program_manager = users.id
-      `;
-
-      countQueryText = `
-        SELECT COUNT(*) 
-        FROM ${tableName}
-      `;
-
-      // Add necessary joins for count query if filtering by joined fields
-      if (joinedTables.has("users")) {
-        countQueryText = `
-          SELECT COUNT(*) 
-          FROM ${tableName}
-          LEFT JOIN users ON ${tableName}.program_manager = users.id
-        `;
-      }
-    } else if (tableName === "objective") {
-      queryText = `
-        SELECT ${tableName}.*, project.name AS belongs_to
-        FROM ${tableName}
-        LEFT JOIN project ON ${tableName}.project_id = project.id
-      `;
-
-      countQueryText = `
-        SELECT COUNT(*) 
-        FROM ${tableName}
-      `;
-
-      // Add necessary joins for count query if filtering by joined fields
-      if (joinedTables.has("project")) {
-        countQueryText = `
-          SELECT COUNT(*) 
-          FROM ${tableName}
-          LEFT JOIN project ON ${tableName}.project_id = project.id
-        `;
+      } else if (tableName === "project") {
+        // Default sort for projects by created_date DESC
+        orderByClause = `ORDER BY "created_date" DESC`;
       }
     } else if (tableName === "project") {
-      queryText = `
-        SELECT ${tableName}.*, users.first_name AS project_manager_name
-        FROM ${tableName}
-        LEFT JOIN users ON ${tableName}.project_manager_id = users.id
-      `;
-
-      countQueryText = `
-        SELECT COUNT(*) 
-        FROM ${tableName}
-      `;
-
-      // Add necessary joins for count query if filtering by joined fields
-      if (joinedTables.has("users")) {
-        countQueryText = `
-          SELECT COUNT(*) 
-          FROM ${tableName}
-          LEFT JOIN users ON ${tableName}.project_manager_id = users.id
-        `;
-      }
-    } else {
-      queryText = `SELECT * FROM "${tableName}"`;
-      countQueryText = `SELECT COUNT(*) FROM "${tableName}"`;
+      // Default sort for projects by created_date DESC
+      orderByClause = `ORDER BY "created_date" DESC`;
     }
+
+    // Build the base query
+    let queryText = `SELECT * FROM "${tableName}"`;
 
     // Add WHERE clause if we have conditions
     if (whereConditions.length > 0) {
       queryText += ` WHERE ${whereConditions.join(" AND ")}`;
-      countQueryText += ` WHERE ${whereConditions.join(" AND ")}`;
     }
 
-    // Add ORDER BY
+    // Add ORDER BY if we have a sort clause
     if (orderByClause) {
       queryText += ` ${orderByClause}`;
     }
@@ -1241,11 +378,15 @@ const getFilteredData = async (req, res) => {
     const result = await sql.unsafe(queryText, queryParams);
 
     // Get total count for pagination
-    const countQueryParams = queryParams.slice(0, -2); // Remove the LIMIT and OFFSET params
+    let countQueryText = `SELECT COUNT(*) FROM "${tableName}"`;
+    if (whereConditions.length > 0) {
+      countQueryText += ` WHERE ${whereConditions.join(" AND ")}`;
+    }
+    const countQueryParams = queryParams.slice(0, -2); // Remove limit and offset params
     const countResult = await sql.unsafe(countQueryText, countQueryParams);
     const totalCount = parseInt(countResult[0].count);
 
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       message: "",
       result,
@@ -1258,10 +399,10 @@ const getFilteredData = async (req, res) => {
     });
   } catch (e) {
     console.error("Error in getFilteredData:", e);
-    res.status(500).json({
+    return res.status(500).json({
       status: "failure",
-      message: "Error in retrieving filtered data",
-      result: e.message,
+      message: "Error in filtering data",
+      result: e.message || e,
     });
   }
 };
@@ -1671,4 +812,5 @@ module.exports = {
   updateUser,
   deleteUser,
   upsertTableSetting,
+  getFilteredData,
 };

@@ -521,37 +521,20 @@ const ProjectModal = ({
   const handleSaveDraft = async () => {
     await handleSubmit(
       async (data) => {
-        const selectedDepartmentIds = getSelectedDepartmentIds();
-        const selectedObjectiveIds = objectives
-          .filter((obj) => obj.checked)
-          .map((obj) => obj.id);
-
-        if (selectedDepartmentIds.length === 0) {
-          toast.error("At least one beneficiary department must be selected");
-          return;
-        }
-        if (selectedObjectiveIds.length === 0) {
-          toast.error("At least one objective must be selected");
-          return;
-        }
-
         try {
-          const projectData = await onSubmit({
-            ...data,
-            approval_status: "Not initiated",
-          });
-          toast.success("Project saved as draft successfully!");
-          onProjectAdded();
-          if (onClose) onClose();
+          data.approval_status = "Not initiated";
+          const response = await onSubmit(data);
+          // Call the onProjectAdded callback to refresh the project table
+          if (response && onProjectAdded) {
+            onProjectAdded();
+          }
         } catch (error) {
           console.error("Error saving draft:", error);
-          toast.error("Failed to save project as draft");
         }
       },
       (errors) => {
-        if (errors.programName) toast.error(errors.programName.message);
-        if (errors.portfolioName) toast.error(errors.portfolioName.message);
-        if (errors.initiativeName) toast.error(errors.initiativeName.message);
+        console.error("Form validation errors:", errors);
+        toast.error("Please fill in all required fields correctly");
       }
     )();
   };
@@ -559,52 +542,34 @@ const ProjectModal = ({
   const handleSaveAndSendForApproval = async () => {
     await handleSubmit(
       async (data) => {
-        const selectedDepartmentIds = getSelectedDepartmentIds();
-        const selectedObjectiveIds = objectives
-          .filter((obj) => obj.checked)
-          .map((obj) => obj.id);
-
-        if (selectedDepartmentIds.length === 0) {
-          toast.error("At least one beneficiary department must be selected");
-          return;
-        }
-        if (selectedObjectiveIds.length === 0) {
-          toast.error("At least one objective must be selected");
-          return;
-        }
-
         try {
-          const projectResponse = await onSubmit({
-            ...data,
-            approval_status: "Waiting on deputy",
-          });
-          const projectId = projectResponse?.data?.result?.id;
-          if (!projectId) throw new Error("Project ID not found in response");
+          data.approval_status = "Pending";
+          const response = await onSubmit(data);
+          
+          // Create a task for deputy to approve the project
+          await axiosInstance.post(
+            `/data-management/createProjectCreationTaskForDeputy`,
+            {
+              project_id: response.data.result.id,
+              project_name: data.name,
+            }
+          );
 
-          const taskResponse = await axiosInstance.post(
-            "/data-management/createProjectCreationTaskForDeputy",
-            { projectId }
-          );
-          if (taskResponse.data && taskResponse.data.status === "success") {
-            toast.success("Project saved and sent for approval successfully!");
+          toast.success("Project sent for approval!");
+          
+          // Call the onProjectAdded callback to refresh the project table
+          if (response && onProjectAdded) {
             onProjectAdded();
-            if (onClose) onClose();
-          } else {
-            throw new Error(
-              taskResponse.data?.message || "Failed to create approval task"
-            );
           }
+          
+          if (onClose) onClose();
         } catch (error) {
-          console.error("Error saving and sending for approval:", error);
-          toast.error(
-            "Failed to save and send project for approval: " + error.message
-          );
+          console.error("Error sending for approval:", error);
         }
       },
       (errors) => {
-        if (errors.programName) toast.error(errors.programName.message);
-        if (errors.portfolioName) toast.error(errors.portfolioName.message);
-        if (errors.initiativeName) toast.error(errors.initiativeName.message);
+        console.error("Form validation errors:", errors);
+        toast.error("Please fill in all required fields correctly");
       }
     )();
   };
