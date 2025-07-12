@@ -33,11 +33,29 @@ console.log('Environment PORT:', process.env.PORT);
 console.log('NODE_ENV:', process.env.NODE_ENV);
 const port = process.env.PORT || 4001; // Use Render's assigned port or fallback to 4001
 
-// Allow * for all origins
-app.use(cors({ origin: '*' }));
+// Configure CORS to handle credentials properly
+const corsOptions = {
+  origin: [
+    'https://project-management-mfog.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:4001'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin'
+  ]
+};
+
+app.use(cors(corsOptions));
 
 // Handle preflight for all routes
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 // Add request logging for debugging
 app.use((req, res, next) => {
