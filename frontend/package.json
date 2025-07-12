@@ -14,7 +14,7 @@
     "@supabase/supabase-js": "^2.49.1",
     "@tailwindcss/vite": "^4.0.8",
     "@tanstack/react-table": "^8.21.2",
-    "axios": "^1.7.9",
+    "axios": "^1.10.0",
     "axois": "^0.0.1-security",
     "chart.js": "^4.4.9",
     "date-fns": "^4.1.0",

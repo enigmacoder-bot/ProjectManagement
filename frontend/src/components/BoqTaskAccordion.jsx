@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import axiosInstance from "../axiosInstance";
 import { FileText, Download } from "lucide-react";
 import { formatCurrency, formatAmount, parseCurrency, convertToFullAmount, formatAmountForInput, parseInputAmount } from "../utils/currencyUtils";
+import ProjectDocuments from "./ProjectDocuments";
 
 // Helper function to parse duration values (handles PostgreSQL intervals and numbers)
 const parseDurationDays = (duration) => {
@@ -86,7 +87,6 @@ const BoqTaskAccordion = ({
 }) => {
   // State management
   const [items, setItems] = useState([]);
-  const [documents, setDocuments] = useState([]);
   const [projectDetails, setProjectDetails] = useState({});
   const [deletions, setDeletions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -152,21 +152,6 @@ const BoqTaskAccordion = ({
       setLoading(false);
     }
   };
-  const fetchDocuments = async () => {
-    try {
-      const { data } = await axiosInstance.post(`/pm/getProjectDocuments`, {
-        projectId: parentId,
-      });
-      console.log("project documents");
-      console.log(data);
-      setDocuments(data.data);
-    } catch (err) {
-      setError(err.message);
-      console.error("Fetch error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
   const fetchProjectandVendorDetails = async () => {
     try {
       const { data } = await axiosInstance.post(
@@ -200,7 +185,6 @@ const BoqTaskAccordion = ({
     console.log("the parent id is " + parentId);
     console.log("the project budget is " + projectBudget);
     fetchItems();
-    fetchDocuments();
     fetchProjectandVendorDetails();
   }, [parentId]);
 
@@ -259,40 +243,6 @@ const BoqTaskAccordion = ({
         return item;
       })
     );
-  };
-
-  const handleDownload = async (fileUrl, fileName) => {
-    if (!fileUrl) {
-      toast.error("No file URL available for download.");
-      return;
-    }
-
-    try {
-      // For Supabase storage URLs, we can use them directly
-      const response = await fetch(fileUrl);
-      console.log(fileName + " the name of the file");
-      console.log("the url of file " + fileUrl);
-      console.log("the response");
-      console.log(response);
-      if (!response.ok) {
-        throw new Error("Failed to fetch the file");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      toast.success(`Downloaded ${fileName}`);
-    } catch (error) {
-      console.error("Error downloading file:", error);
-      toast.error("Failed to download file");
-    }
   };
 
   // Save handler
@@ -512,41 +462,20 @@ const BoqTaskAccordion = ({
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 bg-white p-6 rounded-lg shadow-md">
-        <div className="col-span-4">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">
-            Project Documents
-          </h2>
-        </div>
-        {documents.map((document) => (
-          <div
-            key={document.id}
-            className="p-4 border rounded-lg mb-4 bg-white dark:bg-gray-700 shadow-sm hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center mb-2">
-                <p>{document.name}</p>
-                {document.file_url && (
-                  <Download
-                    className="text-green-500 hover:text-green-700 cursor-pointer"
-                    size={20}
-                    onClick={() =>
-                      handleDownload(document.document_name, document.file_url)
-                    }
-                    title="Download document"
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* Project Documents Section - Using ProjectDocuments Component */}
+      <div className="mb-8">
+        <ProjectDocuments 
+          projectId={parentId} 
+          phaseName={projectDetails.phase_name || project?.phase_name || "Planning"} 
+          className="bg-white rounded-lg shadow-md"
+        />
       </div>
       <div className="mb-6 space-y-4">        <div className="flex gap-4 flex-wrap">
           <div className="p-3 bg-blue-50 rounded-md">
             <span className="font-semibold">Execution Cost:</span> {formatCurrency(totalExecution)}
           </div>
           <div className="p-3 bg-green-50 rounded-md">
-            <span className="font-semibold">Operation Cost:</span> {formatCurrency(totalOperation)}
+            <span className="font-semibold">Maintenance Cost:</span> {formatCurrency(totalOperation)}
           </div>
         </div>
 
@@ -629,7 +558,7 @@ const BoqTaskAccordion = ({
                     disabled={isReadable}
                   >
                     <option value="Execution">Execution</option>
-                    <option value="Operation">Operation</option>
+                    <option value="Operation">Maintenance</option>
                   </select>
                 </td>
                 <td className="px-4 py-2">
