@@ -33,63 +33,11 @@ console.log('Environment PORT:', process.env.PORT);
 console.log('NODE_ENV:', process.env.NODE_ENV);
 const port = process.env.PORT || 4001; // Use Render's assigned port or fallback to 4001
 
-// Configure CORS with environment-based origins
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [
-      'https://project-management-mfog.vercel.app',
-      'https://project-management-mfog.vercel.app/',
-    ]
-  : [
-      'https://project-management-mfog.vercel.app',
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://localhost:4001'
-    ];
+// Allow * for all origins
+app.use(cors({ origin: '*' }));
 
-const corsOptions = {
-  origin: function (origin, callback) {
-    console.log('CORS check - Origin:', origin);
-    
-    // Allow requests with no origin (like mobile apps, Postman, curl)
-    if (!origin) {
-      console.log('No origin header - allowing request');
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.includes(origin)) {
-      console.log('Origin allowed:', origin);
-      callback(null, true);
-    } else {
-      console.log('Origin NOT allowed:', origin);
-      console.log('Allowed origins:', allowedOrigins);
-      // For now, allow all origins to debug the issue
-      callback(null, true);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With', 
-    'Accept', 
-    'Origin',
-    'Access-Control-Request-Method',
-    'Access-Control-Request-Headers'
-  ],
-  optionsSuccessStatus: 200,
-  preflightContinue: false
-};
-
-app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly
-app.options('*', (req, res) => {
-  console.log('Preflight request from:', req.headers.origin);
-  cors(corsOptions)(req, res, () => {
-    res.status(200).end();
-  });
-});
+// Handle preflight for all routes
+app.options('*', cors());
 
 // Add request logging for debugging
 app.use((req, res, next) => {
