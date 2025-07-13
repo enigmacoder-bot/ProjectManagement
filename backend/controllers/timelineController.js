@@ -6,6 +6,8 @@ const { withRetry } = require("../middlewares/databaseHealth");
 const getProjectTimeline = async (req, res) => {
   const { projectId } = req.body;
 
+  console.log(`🔄 Timeline API called for project: ${projectId}`);
+
   if (!projectId) {
     return res.status(400).json({
       status: "failure",
@@ -101,6 +103,16 @@ const getProjectTimeline = async (req, res) => {
     const expectedMainPhases = ["Planning", "Bidding", "Before executing", "Executing", "Support"];
 
     if (schedulePlan.length > 0) {
+      console.log(`📊 Found ${schedulePlan.length} schedule plan items:`, 
+        schedulePlan.map(s => ({ 
+          phaseName: s.phase_name, 
+          mainPhase: s.main_phase, 
+          mappedName: s.mapped_phase_name,
+          startDate: s.start_date, 
+          endDate: s.end_date 
+        }))
+      );
+      
       // Group schedule items by main phase
       const phaseGroups = {};
       
@@ -133,7 +145,8 @@ const getProjectTimeline = async (req, res) => {
         }
       });
 
-      // Convert to timeline format
+      // Convert to timeline format - first collect all phases
+      const allPhases = [];
       Object.values(phaseGroups)
         .sort((a, b) => a.order - b.order)
         .forEach((phase, index) => {
@@ -155,54 +168,115 @@ const getProjectTimeline = async (req, res) => {
                    (deliverableStart <= startDate && deliverableEnd >= endDate);
           });
 
-          let progress = 0;
-          let status = "Not Started";
+          allPhases.push({
+            ...phase,
+            startDate,
+            endDate,
+            totalDays,
+            phaseDeliverables,
+            index
+          });
+        });
 
-          if (phaseDeliverables.length > 0) {
-            const avgProgress = phaseDeliverables.reduce((sum, d) => sum + (d.progress_percentage || 0), 0) / phaseDeliverables.length;
+      // Find the single current active phase
+      let currentActivePhaseIndex = -1;
+      
+      // First, check if current date falls within any phase date range
+      for (let i = 0; i < allPhases.length; i++) {
+        const phase = allPhases[i];
+        if (currentDate >= phase.startDate && currentDate <= phase.endDate) {
+          currentActivePhaseIndex = i;
+          break;
+        }
+      }
+
+      // If no phase contains current date, determine based on sequence
+      if (currentActivePhaseIndex === -1) {
+        if (allPhases.length > 0) {
+          if (currentDate < allPhases[0].startDate) {
+            // Current date is before all phases - first phase should be current
+            currentActivePhaseIndex = 0;
+          } else {
+            // Current date is after some/all phases - find the appropriate phase
+            for (let i = 0; i < allPhases.length; i++) {
+              if (currentDate > allPhases[i].endDate) {
+                // If this is the last phase, or if next phase hasn't started, make next phase current
+                if (i === allPhases.length - 1) {
+                  currentActivePhaseIndex = i; // Last phase remains current if date is past
+                } else {
+                  currentActivePhaseIndex = i + 1; // Next phase becomes current
+                }
+              } else {
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      console.log(`🎯 Timeline: Current active phase index: ${currentActivePhaseIndex} out of ${allPhases.length} phases (Date: ${currentDate.toISOString().split('T')[0]})`);
+
+      // Now build timeline with correct single active phase
+      allPhases.forEach((phase, index) => {
+        let progress = 0;
+        let status = "Not Started";
+
+        // Determine status based on position relative to current active phase
+        if (index < currentActivePhaseIndex) {
+          // Phases before current active phase are completed
+          progress = 100;
+          status = "Completed";
+        } else if (index === currentActivePhaseIndex) {
+          // This is the ONLY current active phase
+          if (phase.phaseDeliverables.length > 0) {
+            const avgProgress = phase.phaseDeliverables.reduce((sum, d) => sum + (d.progress_percentage || 0), 0) / phase.phaseDeliverables.length;
             progress = Math.round(avgProgress);
             
-            const hasDelayed = phaseDeliverables.some(d => d.calculated_status === 'DELAYED');
-            const allCompleted = phaseDeliverables.every(d => d.calculated_status === 'COMPLETED');
-            const hasInProgress = phaseDeliverables.some(d => d.calculated_status === 'IN_PROGRESS');
+            const hasDelayed = phase.phaseDeliverables.some(d => d.calculated_status === 'DELAYED');
+            const allCompleted = phase.phaseDeliverables.every(d => d.calculated_status === 'COMPLETED');
 
-            // Check if phase end date has passed - if so, mark as completed regardless of deliverable status
-            if (currentDate > endDate) {
+            if (allCompleted && progress >= 100) {
               progress = 100;
-              status = "Completed";
-            } else if (allCompleted) {
               status = "Completed";
             } else if (hasDelayed) {
               status = "Delayed";
-            } else if (hasInProgress || progress > 0) {
-              status = "In Progress";
-            } else if (currentDate >= startDate) {
+            } else {
               status = "In Progress";
             }
           } else {
-            // Fallback to date-based progress calculation
-            if (currentDate > endDate) {
+            // Calculate time-based progress for current phase
+            if (currentDate <= phase.startDate) {
+              progress = 0;
+              status = "Not Started";
+            } else if (currentDate >= phase.endDate) {
               progress = 100;
               status = "Completed";
-            } else if (currentDate >= startDate) {
-              const daysPassed = Math.ceil((currentDate - startDate) / (1000 * 60 * 60 * 24));
-              progress = Math.min(100, Math.round((daysPassed / totalDays) * 100));
-              status = progress > 0 ? "In Progress" : "Not Started";
+            } else {
+              const daysPassed = Math.ceil((currentDate - phase.startDate) / (1000 * 60 * 60 * 24));
+              progress = Math.min(100, Math.round((daysPassed / phase.totalDays) * 100));
+              status = "In Progress";
             }
           }
+        } else {
+          // Phases after current active phase are not started
+          progress = 0;
+          status = "Not Started";
+        }
 
-          timeline.push({
-            id: `phase-${index + 1}`,
-            phaseName: phase.phaseName,
-            duration: `${totalDays} days`,
-            startDate: formatDate(startDate),
-            endDate: formatDate(endDate),
-            progress: progress,
-            status: status,
-            deliverableCount: phaseDeliverables.length,
-            order: phase.order
-          });
+        console.log(`📋 Phase ${index + 1} (${phase.phaseName}): ${status} - ${progress}% (${phase.startDate.toISOString().split('T')[0]} to ${phase.endDate.toISOString().split('T')[0]})`);
+
+        timeline.push({
+          id: `phase-${index + 1}`,
+          phaseName: phase.phaseName,
+          duration: `${phase.totalDays} days`,
+          startDate: formatDate(phase.startDate),
+          endDate: formatDate(phase.endDate),
+          progress: progress,
+          status: status,
+          deliverableCount: phase.phaseDeliverables.length,
+          order: phase.order
         });
+      });
     } else {
       // Fallback: Create timeline based on project phases and execution dates
       const phases = await withRetry(async () => {
@@ -283,8 +357,16 @@ const getProjectTimeline = async (req, res) => {
       }
     }
 
-    // Add calculated Executing and Support phases based on project execution data
-    await addCalculatedPhases(timeline, project, deliverablesProgress, currentDate);
+    // Only add calculated Executing and Support phases if they don't already exist from database
+    const existingPhaseNames = timeline.map(t => t.phaseName.toLowerCase());
+    const needsCalculatedPhases = !existingPhaseNames.includes('executing') || !existingPhaseNames.includes('support');
+    
+    if (needsCalculatedPhases) {
+      console.log(`🔧 Adding calculated phases. Existing phases: ${existingPhaseNames.join(', ')}`);
+      await addCalculatedPhases(timeline, project, deliverablesProgress, currentDate, existingPhaseNames);
+    } else {
+      console.log(`✅ All phases exist in database. Skipping calculated phases.`);
+    }
 
     // If no timeline data could be generated, create a basic structure
     if (timeline.length === 0) {
@@ -351,6 +433,28 @@ function formatDate(date) {
   });
 }
 
+// Helper function to parse formatted date back to Date object
+function parseFormattedDate(formattedDate) {
+  if (!formattedDate || formattedDate === "N/A") return null;
+  
+  // Format is "DD Mon YY" (e.g., "07 Oct 25")
+  const parts = formattedDate.split(' ');
+  if (parts.length !== 3) return null;
+  
+  const day = parseInt(parts[0]);
+  const monthMap = {
+    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+    'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08', 
+    'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+  };
+  const month = monthMap[parts[1]];
+  const year = `20${parts[2]}`; // Convert YY to YYYY
+  
+  if (!month) return null;
+  
+  return new Date(`${year}-${month}-${day.toString().padStart(2, '0')}`);
+}
+
 // Helper function to parse duration string to days
 function parseDurationToDays(duration) {
   if (!duration) return 30; // default fallback
@@ -381,13 +485,43 @@ function parseDurationToDays(duration) {
 }
 
 // Helper function to add calculated Executing and Support phases
-async function addCalculatedPhases(timeline, project, deliverablesProgress, currentDate) {
+async function addCalculatedPhases(timeline, project, deliverablesProgress, currentDate, existingPhaseNames = []) {
   const currentOrder = Math.max(...timeline.map(t => t.order || 0), 0);
   
-  // Calculate Executing phase if execution dates are available
-  if (project.execution_start_date && (project.execution_enddate || project.execution_duration)) {
-    const executionStart = new Date(project.execution_start_date);
-    let executionEnd;
+  // Only calculate Executing phase if it doesn't exist and execution dates are available
+  if (!existingPhaseNames.includes('executing') && 
+      project.execution_start_date && (project.execution_enddate || project.execution_duration)) {
+    
+    console.log(`📅 Adding calculated Executing phase`);
+    
+    // Find the latest end date from existing timeline phases
+    const latestEndDate = timeline.reduce((latest, phase) => {
+      if (phase.endDate && phase.endDate !== "N/A") {
+        const phaseEndDate = parseFormattedDate(phase.endDate);
+        return !latest || phaseEndDate > latest ? phaseEndDate : latest;
+      }
+      return latest;
+    }, null);
+    
+    let executionStart, executionEnd;
+    
+    if (latestEndDate) {
+      // Start executing phase the day after the last database phase ends
+      executionStart = new Date(latestEndDate);
+      executionStart.setDate(executionStart.getDate() + 1);
+      console.log(`🔧 Executing phase will start after last database phase: ${executionStart.toISOString().split('T')[0]}`);
+    } else {
+      // Fallback to project execution start date if no database phases
+      executionStart = new Date(project.execution_start_date);
+      console.log(`🔧 Using project execution start date: ${executionStart.toISOString().split('T')[0]}`);
+    }
+    
+    if (project.execution_enddate) {
+      executionEnd = new Date(project.execution_enddate);
+    } else if (project.execution_duration) {
+      const durationDays = parseDurationToDays(project.execution_duration);
+      executionEnd = new Date(executionStart.getTime() + (durationDays * 24 * 60 * 60 * 1000));
+    }
     
     if (project.execution_enddate) {
       executionEnd = new Date(project.execution_enddate);
@@ -454,8 +588,11 @@ async function addCalculatedPhases(timeline, project, deliverablesProgress, curr
     }
   }
   
-  // Calculate Support phase if maintenance duration is available
-  if (project.maintenance_duration && project.execution_enddate) {
+  // Only calculate Support phase if it doesn't exist and maintenance duration is available
+  if (!existingPhaseNames.includes('support') && 
+      project.maintenance_duration && project.execution_enddate) {
+    
+    console.log(`📅 Adding calculated Support phase`);
     const supportStart = new Date(project.execution_enddate);
     supportStart.setDate(supportStart.getDate() + 1); // Start day after execution ends
     

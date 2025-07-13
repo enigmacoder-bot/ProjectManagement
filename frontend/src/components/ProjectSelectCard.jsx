@@ -1,9 +1,13 @@
 import React from "react";
 import { Clock, AlertTriangle, CheckCircle, Clock as ClockIcon, Info, TrendingUp, Calendar, GitPullRequest, Zap } from "lucide-react";
 import Tooltip from "./Tooltip";
+import axiosInstance from "../axiosInstance";
 
 // Project card for dashboard page selection
 export default function ProjectSelectCard({ project, onSelect }) {
+  const [currentPhaseData, setCurrentPhaseData] = React.useState(null);
+  const [loadingPhase, setLoadingPhase] = React.useState(false);
+
   // Extract progress data from project (provided by backend)
   const {
     progress = 0,           // Overall progress based on deliverables
@@ -14,6 +18,57 @@ export default function ProjectSelectCard({ project, onSelect }) {
     lastUpdated
   } = project;
 
+  // Fetch current phase data from timeline API for consistency
+  React.useEffect(() => {
+    const fetchCurrentPhase = async () => {
+      if (!project.id) return;
+      
+      try {
+        setLoadingPhase(true);
+        const response = await axiosInstance.post(
+          `/data-management/getProjectTimeline`,
+          { projectId: project.id },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.data.status === "success" && response.data.result.timeline) {
+          const timeline = response.data.result.timeline;
+          // Find current phase (first in-progress or not started phase)
+          const currentPhase = timeline.find(phase => 
+            phase.status === 'In Progress' || phase.status === 'IN_PROGRESS'
+          ) || timeline.find(phase => 
+            phase.status === 'Not Started' || phase.status === 'NOT_STARTED'
+          ) || timeline[0]; // Fallback to first phase
+
+          if (currentPhase) {
+            setCurrentPhaseData({
+              name: currentPhase.phaseName,
+              progress: currentPhase.progress || 0,
+              status: currentPhase.status
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching phase data:', error);
+        // Fallback to original logic if timeline API fails
+        const fallbackPhase = project.currentPhase
+          ? project.currentPhase
+          : project.current_phase_name
+          ? { name: project.current_phase_name, progress: project.current_phase_progress }
+          : null;
+        setCurrentPhaseData(fallbackPhase);
+      } finally {
+        setLoadingPhase(false);
+      }
+    };
+
+    fetchCurrentPhase();
+  }, [project.id, project.currentPhase, project.current_phase_name, project.current_phase_progress]);
+
   // Enhanced debug logging to see what values we're getting
   React.useEffect(() => {
     console.log(`ProjectSelectCard Debug - ${project.name || 'Unnamed'}:`, {
@@ -22,14 +77,11 @@ export default function ProjectSelectCard({ project, onSelect }) {
       health,
       completedDeliverables,
       totalDeliverables,
-      // Check for alternate field names in case backend uses different naming
-      alt_completedDeliverables: project.completed_deliverables,
-      alt_totalDeliverables: project.total_deliverables,
-      alt_completedTasks: project.completed_tasks,
-      alt_totalTasks: project.total_tasks,
-      rawProject: project
+      currentPhaseFromTimeline: currentPhaseData,
+      loadingPhase,
+      projectId: project.id
     });
-  }, [project, progress, timeProgress, completedDeliverables, totalDeliverables]);
+  }, [project, progress, timeProgress, completedDeliverables, totalDeliverables, currentPhaseData, loadingPhase]);
 
   // Determine colors based on project health
   const getStatusColors = () => {
@@ -70,13 +122,7 @@ export default function ProjectSelectCard({ project, onSelect }) {
   };
 
   const statusColors = getStatusColors();
-  // Fallback for phase data when backend provides snake_case fields
-  const currentPhaseData = project.currentPhase
-    ? project.currentPhase
-    : project.current_phase_name
-    ? { name: project.current_phase_name, progress: project.current_phase_progress }
-    : null;
-
+  
   // Format budget if it exists
   const formatBudget = (budget) => {
     if (!budget) return "N/A";
@@ -176,7 +222,7 @@ export default function ProjectSelectCard({ project, onSelect }) {
         </div>
 
         {/* Current Phase */}
-        {currentPhaseData && (
+        {(currentPhaseData || loadingPhase) && (
           <div className="mt-2">
             <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
               <div className="flex items-center">
@@ -184,18 +230,28 @@ export default function ProjectSelectCard({ project, onSelect }) {
                 <span>Current Phase</span>
               </div>
               <div className="flex items-center">
-                <span className="font-medium">{currentPhaseData.name}</span>
-                <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded">
-                  {currentPhaseData.progress}%
-                </span>
+                {loadingPhase ? (
+                  <span className="text-xs text-gray-400">Loading...</span>
+                ) : currentPhaseData ? (
+                  <>
+                    <span className="font-medium">{currentPhaseData.name}</span>
+                    <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded">
+                      {Math.round(currentPhaseData.progress || 0)}%
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-400">No phase data</span>
+                )}
               </div>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-1.5">
-              <div 
-                className="h-full rounded-full bg-blue-400"
-                style={{ width: `${Math.min(100, Math.max(0, currentPhaseData.progress))}%` }}
-              ></div>
-            </div>
+            {!loadingPhase && currentPhaseData && (
+              <div className="w-full bg-gray-100 rounded-full h-1.5">
+                <div 
+                  className="h-full rounded-full bg-blue-400"
+                  style={{ width: `${Math.min(100, Math.max(0, currentPhaseData.progress || 0))}%` }}
+                ></div>
+              </div>
+            )}
           </div>
         )}
       </div>
