@@ -31,11 +31,27 @@ const DashboardContainerPage = () => {
       
       try {
         setLoading(true);
-        const response = await axiosInstance.get(`/project-card/projects/${userId}?role=${role}
- `);
+        console.log("Fetching projects for userId:", userId, "role:", role);
+        const response = await axiosInstance.get(`/project-card/projects/${userId}?role=${role}`);
+        
+        console.log("Raw API response:", response.data);
         
         if (response.data && response.data.status === "success") {
-          setProjects(response.data.result || []);
+          const projects = response.data.result || [];
+          console.log("Projects received:", projects);
+          
+          // Debug each project's deliverable data
+          projects.forEach((project, index) => {
+            console.log(`Project ${index + 1} (${project.name || 'Unnamed'}):`, {
+              completedDeliverables: project.completedDeliverables,
+              totalDeliverables: project.totalDeliverables,
+              progress: project.progress,
+              health: project.health,
+              allFields: Object.keys(project)
+            });
+          });
+          
+          setProjects(projects);
           setError(null);
         } else {
           setError("Failed to load projects");

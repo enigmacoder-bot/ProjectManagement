@@ -14,7 +14,7 @@ export default function ProjectSelectCard({ project, onSelect }) {
     lastUpdated
   } = project;
 
-  // Debug logging to see what values we're getting
+  // Enhanced debug logging to see what values we're getting
   React.useEffect(() => {
     console.log(`ProjectSelectCard Debug - ${project.name || 'Unnamed'}:`, {
       progress,
@@ -22,9 +22,14 @@ export default function ProjectSelectCard({ project, onSelect }) {
       health,
       completedDeliverables,
       totalDeliverables,
+      // Check for alternate field names in case backend uses different naming
+      alt_completedDeliverables: project.completed_deliverables,
+      alt_totalDeliverables: project.total_deliverables,
+      alt_completedTasks: project.completed_tasks,
+      alt_totalTasks: project.total_tasks,
       rawProject: project
     });
-  }, [project, progress, timeProgress]);
+  }, [project, progress, timeProgress, completedDeliverables, totalDeliverables]);
 
   // Determine colors based on project health
   const getStatusColors = () => {
@@ -198,7 +203,7 @@ export default function ProjectSelectCard({ project, onSelect }) {
       {/* Deliverables and Last Updated */}
       <div className="flex items-center justify-between mt-2 text-xs">
         <span className={`px-2 py-1 rounded-full ${statusColors.bg} ${statusColors.text}`}>
-          {completedDeliverables} of {totalDeliverables} tasks
+          {completedDeliverables} completed of {totalDeliverables} deliverables
         </span>
         <span className="text-gray-500 flex items-center">
           <Clock className="w-3 h-3 mr-1" />
