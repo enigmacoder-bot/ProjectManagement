@@ -547,14 +547,24 @@ const ProjectModal = ({
     );
   }, [projectType, projectTypes]);
 
-  // Approved budget disable logic for Internal Project and Proof of Concept
+  // Approved budget disable logic for Internal Project and Proof of Concept and Planning/Bidding phases
   const isApprovedBudgetDisabled = useMemo(() => {
     const restrictedTypes = ["Internal Project", "Proof of Concept"];
     const currentType = projectTypes.find(
       (type) => type.id.toString() === projectType?.toString()
     );
-    return restrictedTypes.includes(currentType?.name || "");
-  }, [projectType, projectTypes]);
+    
+    // Check if project type is restricted (Internal Project or Proof of Concept)
+    const isRestrictedType = restrictedTypes.includes(currentType?.name || "");
+    
+    // Check if current phase is Planning or Bidding
+    const currentPhaseObj = projectPhases.find(
+      (phase) => phase.id.toString() === currentPhase?.toString()
+    );
+    const isPlanningOrBiddingPhase = ["Planning", "Bidding"].includes(currentPhaseObj?.name || "");
+    
+    return isRestrictedType || isPlanningOrBiddingPhase;
+  }, [projectType, projectTypes, currentPhase, projectPhases]);
 
   const getCurrentPhaseDocumentTemplates = async (phase) => {
     try {
@@ -1866,7 +1876,7 @@ const ProjectModal = ({
                       }`}
                     >
                       Project Approved Budget(in SAR)
-                      {isApprovedBudgetDisabled && " (Disabled for this project type)"}
+                      {isApprovedBudgetDisabled && " (Disabled)"}
                     </label>
                     <input
                       readOnly={readOnly || isApprovedBudgetDisabled}

@@ -308,8 +308,18 @@ const UpdateProjectModal = ({
     const currentType = projectTypes.find(
       (type) => type.id.toString() === projectType?.toString()
     );
-    return restrictedTypes.includes(currentType?.name || "");
-  }, [projectType, projectTypes]);
+    
+    // Check if project type is restricted (Internal Project or Proof of Concept)
+    const isRestrictedType = restrictedTypes.includes(currentType?.name || "");
+    
+    // Check if current phase is Planning or Bidding
+    const currentPhaseObj = projectPhases.find(
+      (phase) => phase.id.toString() === currentPhase?.toString()
+    );
+    const isPlanningOrBiddingPhase = ["Planning", "Bidding"].includes(currentPhaseObj?.name || "");
+    
+    return isRestrictedType || isPlanningOrBiddingPhase;
+  }, [projectType, projectTypes, currentPhase, projectPhases]);
 
   const isCategoryDisabled = useMemo(() => {
     const restrictedTypes = ["Internal Project", "Proof of Concept"];
@@ -1672,7 +1682,7 @@ const UpdateProjectModal = ({
                       }`}
                     >
                       Project Approved Budget(in SAR)
-                      {isApprovedBudgetDisabled && " (Disabled for this project type)"}
+                      {isApprovedBudgetDisabled && " (Disabled)"}
                     </label>
                     <input
                       readOnly={readOnly || isApprovedBudgetDisabled}
